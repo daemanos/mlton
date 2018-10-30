@@ -47,6 +47,8 @@ local
    two-point-lattice.fun
    three-point-lattice.sig
    ann "forceUsed" in three-point-lattice.fun end
+   interval-lattice.sig
+   ann "forceUsed" in interval-lattice.fun end
    restore.sig
    restore.fun
 

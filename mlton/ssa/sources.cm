@@ -62,6 +62,8 @@ two-point-lattice.sig
 two-point-lattice.fun
 three-point-lattice.sig
 three-point-lattice.fun
+interval-lattice.sig
+interval-lattice.fun
 restore.sig
 restore.fun
 
