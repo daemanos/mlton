@@ -324,13 +324,21 @@ structure Exp =
 
       (* Vals to determine the size for inline.fun and loop optimization*)
       val size : t -> int =
-         fn ConApp {args, ...} => 1 + Vector.length args
-          | Const _ => 0
-          | PrimApp {args, ...} => 1 + Vector.length args
-          | Profile _ => 0
-          | Select _ => 1 + 1
-          | Tuple xs => 1 + Vector.length xs
-          | Var _ => 0
+         let
+            val primSize: Type.t Prim.t * int -> int =
+              if !Control.weightedPrims
+              then fn (prim, base) => (Prim.weight prim) * base
+              else fn (_, base) => base
+         in
+            fn ConApp {args, ...} => 1 + Vector.length args
+             | Const _ => 0
+             | PrimApp {prim, args, ...} =>
+                  primSize (prim, 1 + Vector.length args)
+             | Profile _ => 0
+             | Select _ => 1 + 1
+             | Tuple xs => 1 + Vector.length xs
+             | Var _ => 0
+         end
 
       fun foreachVar (e, v) =
          let

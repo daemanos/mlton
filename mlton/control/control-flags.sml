@@ -1294,6 +1294,10 @@ val warnDeprecated = control {name = "warn deprecated features",
                               default = true,
                               toString = Bool.toString}
 
+val weightedPrims = control {name = "weighted prims",
+                             default = false,
+                             toString = Bool.toString}
+
 val zoneCutDepth: int ref =
    control {name = "zone cut depth",
             default = 100,

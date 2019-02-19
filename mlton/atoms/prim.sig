@@ -292,6 +292,7 @@ signature PRIM =
        * not examples: Array_sub, Array_uninit, Ref_deref, Ref_ref
        *)
       val maySideEffect: 'a t -> bool
+      val weight: 'a t -> int
       val name: 'a t -> 'a Name.t
       val realCastToWord: RealSize.t * WordSize.t -> 'a t
       val reff: 'a t

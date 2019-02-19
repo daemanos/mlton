@@ -424,6 +424,8 @@ signature CONTROL_FLAGS =
 
       val warnDeprecated: bool ref
 
+      val weightedPrims: bool ref
+
       val zoneCutDepth: int ref
 
       (*------------------------------------*)

@@ -980,6 +980,13 @@ fun isFunctional p = Kind.Functional = kind p
 
 fun maySideEffect p = Kind.SideEffect = kind p
 
+val weight: 'a t -> int =
+  fn Word_addCheckP _ => ~1
+   | Word_mulCheckP _ => ~1
+   | Word_negCheckP _ => ~1
+   | Word_subCheckP _ => ~1
+   | _ => 1
+
 local
    fun reals (s: RealSize.t) =
       [(Real_Math_acos s),

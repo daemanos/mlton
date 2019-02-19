@@ -902,6 +902,9 @@ fun makeOptions {usage} =
        (Expert, "warn-deprecated", " {true|false}",
         "deprecated feature warnings",
         boolRef warnDeprecated),
+       (Expert, "weight-prims", "{true|false}",
+        "enable weighted prims",
+        boolRef weightedPrims),
        (Expert, "xml-passes", " <passes>", "xml optimization passes",
         SpaceString
         (fn s =>
