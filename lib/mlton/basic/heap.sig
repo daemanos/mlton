@@ -35,4 +35,5 @@ signature HEAP =
       val min: 'a t -> 'a
       val new: (Key.t * 'a) list -> 'a t
       val singleton: Key.t * 'a -> 'a t
+      val size: 'a t -> int
    end

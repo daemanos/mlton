@@ -305,6 +305,7 @@ in
       functor Control
       functor Env
       functor EuclideanRing
+      functor Heap
       functor IntUniqueId
       functor MonoArray
       functor MonoVector
