@@ -64,6 +64,8 @@ local
    flatten.fun
    inline.sig
    inline.fun
+   inline-incremental.sig
+   inline-incremental.fun
    introduce-loops.fun
    known-case.fun
    local-flatten.fun
