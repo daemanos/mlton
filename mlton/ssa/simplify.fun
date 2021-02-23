@@ -12,11 +12,16 @@ struct
 
 open S
 
+structure ConstantPropagationDFP = ConstantPropagationDFP (S)
+
 structure CommonArg = CommonArg (S)
 structure CommonBlock = CommonBlock (S)
 structure CommonSubexp = CommonSubexp (S)
 structure CombineConversions = CombineConversions (S)
 structure ConstantPropagation = ConstantPropagation (S)
+structure ConstantPropagationDFX = DataflowTransform (
+   structure P = ConstantPropagationDFP
+   structure S = S)
 structure Contify = Contify (S)
 structure DuplicateGlobals = DuplicateGlobals (S)
 structure Flatten = Flatten (S)
@@ -54,6 +59,84 @@ val ssaPassesDefault =
    {name = "contify1", doit = Contify.transform, execute = true} ::
    {name = "localFlatten1", doit = LocalFlatten.transform, execute = true} ::
    {name = "constantPropagation", doit = ConstantPropagation.transform, execute = true} ::
+   {name = "duplicateGlobals1", doit = DuplicateGlobals.transform, execute = false} ::
+   {name = "splitTypes1", doit = SplitTypes.transform, execute = true} ::
+   (* useless should run 
+    *   - after constant propagation because constant propagation makes
+    *     slots of tuples that are constant useless
+    *)
+   {name = "useless", doit = Useless.transform, execute = true} ::
+   (* loopUnroll should run
+    *   - after constants have been globalized
+    *)
+   {name = "loopUnroll1", doit = LoopUnroll.transform, execute = false} ::
+   {name = "removeUnused2", doit = RemoveUnused.transform, execute = true} ::
+   {name = "duplicateGlobals2", doit = DuplicateGlobals.transform, execute = true} ::
+   {name = "splitTypes2", doit = SplitTypes.transform, execute = true} ::
+   {name = "simplifyTypes", doit = SimplifyTypes.transform, execute = true} ::
+   (* polyEqual should run
+    *   - after types are simplified so that many equals are turned into eqs
+    *   - before inlining so that equality functions can be inlined
+    *)
+   {name = "polyEqual", doit = PolyEqual.transform, execute = true} ::
+   (* polyHash should run
+    *   - after types are simplified
+    *   - before inlining so that hash functions can be inlined
+    *)
+   {name = "polyHash", doit = PolyHash.transform, execute = true} ::
+   {name = "introduceLoops2", doit = IntroduceLoops.transform, execute = true} ::
+   {name = "loopInvariant2", doit = LoopInvariant.transform, execute = true} ::
+   (* loopUnswitch should run
+    *   - after loop invariant code motion so invariant conditions are obvious
+    *   - before a knownCase pass to cleanup after unswitching
+    *)
+   {name = "loopUnswitch1", doit = LoopUnswitch.transform, execute = false} ::
+   {name = "knownCase1", doit = KnownCase.transform, execute = false} ::
+   {name = "contify2", doit = Contify.transform, execute = true} ::
+   {name = "inlineNonRecursive", doit = fn p =>
+    Inline.inlineNonRecursive (p, !Control.inlineNonRec), execute = true} ::
+   {name = "localFlatten2", doit = LocalFlatten.transform, execute = true} ::
+   {name = "removeUnused3", doit = RemoveUnused.transform, execute = true} ::
+   {name = "contify3", doit = Contify.transform, execute = true} ::
+   {name = "introduceLoops3", doit = IntroduceLoops.transform, execute = true} ::
+   {name = "loopInvariant3", doit = LoopInvariant.transform, execute = true} ::
+   {name = "localRef", doit = LocalRef.transform, execute = true} ::
+   {name = "flatten", doit = Flatten.transform, execute = true} ::
+   {name = "localFlatten3", doit = LocalFlatten.transform, execute = true} ::
+   {name = "combineConversions", doit = CombineConversions.transform, execute = true} ::
+   {name = "commonArg", doit = CommonArg.transform, execute = true} ::
+   {name = "commonSubexp1", doit = CommonSubexp.transform, execute = true} ::
+   {name = "commonBlock", doit = CommonBlock.transform, execute = true} ::
+   (* shareZeroVec should run
+    *  - after useless because sharing of zero-length array inhibits
+    *    changing type of flow-disjoint vector data
+    *  - after simplifyTypes because it may make previously distinct
+    *    types equal and allow more sharing of zero-length arrays
+    *  - after inlining because shareZeroVec (slightly) increases size
+    *  - before redundantTests because shareZeroVec introduces
+    *    comparisons with zero
+    *)
+   {name = "shareZeroVec", doit = ShareZeroVec.transform, execute = true} ::
+   {name = "redundantTests", doit = RedundantTests.transform, execute = true} ::
+   {name = "redundant", doit = Redundant.transform, execute = true} ::
+   {name = "loopUnswitch2", doit = LoopUnswitch.transform, execute = false} ::
+   {name = "knownCase2", doit = KnownCase.transform, execute = true} ::
+   {name = "loopUnroll2", doit = LoopUnroll.transform, execute = false} ::
+   {name = "commonSubexp2", doit = CommonSubexp.transform, execute = false} ::
+   {name = "removeUnused4", doit = RemoveUnused.transform, execute = true} ::
+   nil
+
+val ssaPassesDFX =
+   {name = "removeUnused1", doit = RemoveUnused.transform, execute = true} ::
+   {name = "introduceLoops1", doit = IntroduceLoops.transform, execute = true} ::
+   {name = "loopInvariant1", doit = LoopInvariant.transform, execute = true} ::
+   {name = "inlineLeaf1", doit = fn p =>
+    Inline.inlineLeaf (p, !Control.inlineLeafA), execute = true} ::
+   {name = "inlineLeaf2", doit = fn p =>
+    Inline.inlineLeaf (p, !Control.inlineLeafB), execute = true} ::
+   {name = "contify1", doit = Contify.transform, execute = true} ::
+   {name = "localFlatten1", doit = LocalFlatten.transform, execute = true} ::
+   {name = "constantPropagationDFX", doit = ConstantPropagationDFX.transform, execute = true} ::
    {name = "duplicateGlobals1", doit = DuplicateGlobals.transform, execute = false} ::
    {name = "splitTypes1", doit = SplitTypes.transform, execute = true} ::
    (* useless should run 
@@ -273,6 +356,8 @@ fun ssaPassesSet s =
                     ; Result.Yes ())
     | "minimal" => (ssaPasses := ssaPassesMinimal
                     ; Result.Yes ())
+    | "dfx" => (ssaPasses := ssaPassesDFX
+                ; Result.Yes ())
     | _ => ssaPassesSetCustom s
 val _ = Control.OptimizationPasses.register
         {il = "ssa", set = ssaPassesSet}

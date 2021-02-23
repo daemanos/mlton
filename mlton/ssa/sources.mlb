@@ -41,6 +41,8 @@ local
 
    ssa-transform.sig
    ssa2-transform.sig
+   dataflow-problem.sig
+   dataflow-transform.fun
    common-arg.fun
    common-block.fun
    common-subexp.fun
@@ -50,6 +52,7 @@ local
    multi.fun
    combine-conversions.fun
    constant-propagation.fun
+   constant-propagation-dfp.fun
    contify.fun
    deep-flatten.fun
    duplicate-globals.fun
