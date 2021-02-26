@@ -41,6 +41,8 @@ local
 
    ssa-transform.sig
    ssa2-transform.sig
+   dataflow-tree.sig
+   dataflow-tree.fun
    dataflow-problem.sig
    dataflow-transform.fun
    common-arg.fun

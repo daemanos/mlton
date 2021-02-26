@@ -13,37 +13,18 @@
 functor ConstantPropagationDFP(S: SSA_TRANSFORM_STRUCTS): DATAFLOW_PROBLEM =
 struct
 
-open S
+structure T = DataflowTree (S)
+open T
 
 (* FIXME dummy implementation *)
 
 type f = unit
-type change = unit option
-
-structure FactBase =
-struct
-   type 'a t = (Label.t * 'a) list
-
-   fun mkLabelMap las = las
-
-   fun insert las la = la::las
-
-   fun lookup las l =
-      case las of
-         ((l',a)::rest) =>
-            if Label.equals (l,l') then SOME a
-            else lookup rest l
-       | [] => NONE
-end
-
-datatype 'a Fact = Open of 'a
-                 | Closed of 'a FactBase.t
 
 val bot = ()
-fun join _ _ = (NONE, ())
+fun join _ _ = NONE
 
-fun transfer _ _ = Open () 
+fun transfer _ _ = Fact.O ()
 
-fun rewrite _ _ = NONE
+fun rewrite _ _ = []
 
 end

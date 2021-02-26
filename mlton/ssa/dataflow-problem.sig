@@ -4,38 +4,20 @@
  * See the file MLton-LICENSE for details.
  *)
 
-signature DATAFLOW_PROBLEM_STRUCTS =
-   sig
-      include RESTORE
-   end
-
 signature DATAFLOW_PROBLEM =
    sig
-      include DATAFLOW_PROBLEM_STRUCTS
+      include DATAFLOW_TREE
 
       type f
-      type change = unit option
-
-      (* Fact definition *)
-      structure FactBase : sig
-         type 'a t
-
-         val mkLabelMap : (Label.t * 'a) list -> 'a t
-
-         val insert : 'a t -> (Label.t * 'a) -> 'a t
-         val lookup : 'a t -> Label.t -> 'a option
-      end
-
-      datatype 'a Fact = Open of 'a
-                       | Closed of 'a FactBase.t
 
       (* Lattice definition *)
+      (* TODO separate into own functor/signature pair *)
       val bot : f
-      val join : f -> f -> (change * f)
+      val join : f -> f -> f option
 
       (* Transfers *)
-      val transfer : unit DirectedGraph.Node.t -> f -> f Fact
+      val transfer : Node.t -> f -> f Fact.t
 
       (* Rewrites *)
-      val rewrite : unit DirectedGraph.Node.t -> f -> (unit DirectedGraph.t) option
+      val rewrite : Node.t -> f -> Block.t list
    end
