@@ -8,16 +8,12 @@ signature DATAFLOW_PROBLEM =
    sig
       include DATAFLOW_TREE
 
-      type f
-
-      (* Lattice definition *)
-      (* TODO separate into own functor/signature pair *)
-      val bot : f
-      val join : f -> f -> f option
+      (* Fact lattice definition *)
+      structure Fact: DATAFLOW_LATTICE
 
       (* Transfers *)
-      val transfer : Node.t -> f -> f Fact.t
+      val transfer : Node.t -> Fact.t -> Fact.t outflow
 
       (* Rewrites *)
-      val rewrite : Node.t -> f -> Block.t list
+      val rewrite : Node.t -> Fact.t -> Block.t list
    end

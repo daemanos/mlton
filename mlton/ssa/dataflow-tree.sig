@@ -25,10 +25,8 @@ signature DATAFLOW_TREE =
          val lookup : 'a t -> Label.t -> 'a option
       end
 
-      structure Fact : sig
-         datatype 'a t = O of 'a
-                       | C of 'a FactBase.t
-      end
+      datatype 'a outflow = Cont of 'a
+                          | Base of 'a FactBase.t
 
       structure Node : sig
          datatype t = S of Statement.t

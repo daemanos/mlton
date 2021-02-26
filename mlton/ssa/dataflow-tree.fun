@@ -29,10 +29,9 @@ end
 
 (* FIXME dummy implementation *)
 
-structure Fact = struct
-   datatype 'a t = O of 'a
-                 | C of 'a FactBase.t
-end
+(* FIXME name? *)
+datatype 'a outflow = Cont of 'a
+                    | Base of 'a FactBase.t
 
 structure Node = struct
    datatype t = S of Statement.t

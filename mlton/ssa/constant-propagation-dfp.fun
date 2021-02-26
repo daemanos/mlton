@@ -18,12 +18,18 @@ open T
 
 (* FIXME dummy implementation *)
 
-type f = unit
+structure Fact = struct
+   datatype t = Top
+              | Bot
+              | Val of unit
 
-val bot = ()
-fun join _ _ = NONE
+   val top = Top
+   val bot = Bot
 
-fun transfer _ _ = Fact.O ()
+   fun join _ _ = NONE
+end
+
+fun transfer _ _ = Base []
 
 fun rewrite _ _ = []
 
