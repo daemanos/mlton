@@ -48,6 +48,11 @@ datatype 'f rewrite = Doit of 'f rw
                     | Iter of 'f rewrite
                     | Noop
 
+fun mkRewrite r = Doit r
+fun thenRewrite r1 r2 = Then (r1, r2)
+fun iterRewrite r = Iter r
+fun deepRewrite r = Iter (Doit r)
+
 type 'f transferLb = Label.t -> 'f -> 'f
 type 'f transferSt = Statement.t -> 'f -> 'f
 type 'f transferTr = Transfer.t -> 'f -> 'f FactBase.t

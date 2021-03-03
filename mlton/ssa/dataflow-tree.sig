@@ -46,6 +46,12 @@ signature DATAFLOW_TREE =
                           | Iter of 'f rewrite
                           | Noop
 
+      (* helper combinators to package rewrites *)
+      val mkRewrite : 'f rw -> 'f rewrite
+      val thenRewrite : 'f rewrite -> 'f rewrite -> 'f rewrite
+      val iterRewrite : 'f rewrite -> 'f rewrite
+      val deepRewrite : 'f rw -> 'f rewrite
+
       (* introduce incoming facts to a new block *)
       type 'f transferLb = Label.t -> 'f -> 'f
 
@@ -58,6 +64,7 @@ signature DATAFLOW_TREE =
       (* triple of transfer functions *)
       type 'f transfer = ('f transferLb * 'f transferSt * 'f transferTr)
 
+      (* helper combinator to package transfers *)
       val mkTransfer : 'f transferLb ->
                        'f transferSt ->
                        'f transferTr ->
