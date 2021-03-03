@@ -12,8 +12,8 @@ signature DATAFLOW_PROBLEM =
       structure Fact: DATAFLOW_LATTICE
 
       (* Transfers *)
-      val transfer : Node.t -> Fact.t -> Fact.t outflow
+      val transfer : Fact.t transfer
 
       (* Rewrites *)
-      val rewrite : Node.t -> Fact.t -> Block.t list
+      val rewrite : Fact.t rewrite
    end

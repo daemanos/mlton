@@ -29,8 +29,17 @@ structure Fact = struct
    fun join _ _ = NONE
 end
 
-fun transfer _ _ = Base []
+open Fact
 
-fun rewrite _ _ = []
+val transfer =
+let
+   fun lb _ _ = Top
+   fun st _ _ = Top
+   fun tr _ _ = FactBase.empty
+in
+   mkTransfer lb st tr
+end
+
+val rewrite = Noop
 
 end

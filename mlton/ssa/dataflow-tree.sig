@@ -13,26 +13,54 @@ signature DATAFLOW_TREE =
    sig
       include DATAFLOW_TREE_STRUCTS
 
-      datatype Shape = Open | Closed
-
       (* Fact definition *)
       structure FactBase : sig
          type 'a t
 
-         val mkFactBase : (Label.t * 'a) list -> 'a t
+         val empty : 'a t
+         val fromList: (Label.t * 'a) list -> 'a t
 
          val insert : 'a t -> (Label.t * 'a) -> 'a t
          val lookup : 'a t -> Label.t -> 'a option
       end
 
-      datatype 'a outflow = Cont of 'a
-                          | Base of 'a FactBase.t
-
       structure Node : sig
-         datatype t = S of Statement.t
+         datatype t = L of Label.t
+                    | S of Statement.t
                     | T of Transfer.t
-
-         val shape : t -> Shape
       end
+
+      structure ReplaceBlock : sig
+         datatype t = T of {label: Label.t option,
+                            statements: Statement.t vector,
+                            transfer: Transfer.t option}
+
+         val empty : t
+         val noop : t list
+      end
+
+      type 'f rw = Node.t -> 'f -> ReplaceBlock.t list
+
+      datatype 'f rewrite = Doit of 'f rw
+                          | Then of ('f rewrite * 'f rewrite)
+                          | Iter of 'f rewrite
+                          | Noop
+
+      (* introduce incoming facts to a new block *)
+      type 'f transferLb = Label.t -> 'f -> 'f
+
+      (* propagate facts after a statement within a block *)
+      type 'f transferSt = Statement.t -> 'f -> 'f
+
+      (* resolve outgoing facts by target label *)
+      type 'f transferTr = Transfer.t -> 'f -> 'f FactBase.t
+
+      (* triple of transfer functions *)
+      type 'f transfer = ('f transferLb * 'f transferSt * 'f transferTr)
+
+      val mkTransfer : 'f transferLb ->
+                       'f transferSt ->
+                       'f transferTr ->
+                       'f transfer
 
    end
