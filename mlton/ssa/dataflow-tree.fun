@@ -32,16 +32,16 @@ structure Node = struct
               | T of Transfer.t
 end
 
-structure ReplaceBlock = struct
-   datatype t = T of {label: Label.t option,
-                      statements: Statement.t vector,
-                      transfer: Transfer.t option}
-
-   val empty = T {label=NONE, statements=Vector.new0 (), transfer=NONE}
-   val noop = [empty]
+structure ReplaceNode = struct
+   datatype t = Blocks of {entry: Statement.t vector * Transfer.t,
+                           blocks: Block.t vector,
+                           return: Label.t * Statement.t vector}
+              | Statements of Statement.t vector
+              | Transfer of Transfer.t
+              | Empty
 end
 
-type 'f rw = Node.t -> 'f -> ReplaceBlock.t list
+type 'f rw = Node.t -> 'f -> ReplaceNode.t option
 
 datatype 'f rewrite = Doit of 'f rw
                     | Then of ('f rewrite * 'f rewrite)
