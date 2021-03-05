@@ -24,22 +24,48 @@ signature DATAFLOW_TREE =
          val lookup : 'a t -> Label.t -> 'a option
       end
 
-      structure Node : sig
-         datatype t = L of Label.t
-                    | S of Statement.t
-                    | T of Transfer.t
-      end
+      (* block prefix : arguments to the block, a label, and 0 or more
+       * statements *)
+      type prefix = {args: (Var.t * Type.t) vector,
+                     label: Label.t,
+                     statements: Statement.t vector}
 
-      structure ReplaceNode : sig
-         datatype t = Blocks of {entry: Statement.t vector * Transfer.t,
-                                 blocks: Block.t vector,
-                                 return: Label.t * Statement.t vector}
-                    | Statements of Statement.t vector
-                    | Transfer of Transfer.t
-                    | Empty
-      end
+      (* block suffix : 0 or more statements followed by a transfer *)
+      type suffix = {statements: Statement.t vector,
+                     transfer: Transfer.t}
 
-      type 'f rw = Node.t -> 'f -> ReplaceNode.t option
+      (* A closed/open node is an (args, label) pair and a closed/open graph
+       * is a sequence of 0 or more blocks followed by a replacement closed/open
+       * node and a sequence of 0 or more statements *)
+      type 'f rwLb = (Var.t * Type.t) vector * Label.t -> 'f ->
+                     {blocks: Block.t list, prefix: prefix option}
+
+      val norwLb : 'f rwLb
+
+      (* An open/closed node is a transfer and an open/closed graph is a
+       * sequence of 0 or more statements followed by a transfer and 0 or more
+       * additional blocks *)
+      type 'f rwTr = Transfer.t -> 'f ->
+                     {suffix: suffix option, blocks: Block.t list}
+
+      val norwTr : 'f rwTr
+
+      datatype ReplaceSt = Statements of Statement.t vector
+                         | Graph of {suffix: suffix,
+                                     blocks: Block.t list,
+                                     prefix: prefix}
+
+      (* An open/open node is a statement and an open/open graph is either a
+       * sequence of 0 or more statements or a new block suffix followed by any
+       * number of additional blocks and a new block prefix *)
+      type 'f rwSt = Statement.t -> 'f -> ReplaceSt option
+
+      val norwSt : 'f rwSt
+
+      type 'f rw = ('f rwLb * 'f rwSt * 'f rwTr)
+
+      (* helper function to package rewrite functions *)
+      val mkRw : 'f rwLb -> 'f rwSt -> 'f rwTr -> 'f rw
 
       datatype 'f rewrite = Doit of 'f rw
                           | Then of ('f rewrite * 'f rewrite)
@@ -53,7 +79,7 @@ signature DATAFLOW_TREE =
       val deepRewrite : 'f rw -> 'f rewrite
 
       (* introduce incoming facts to a new block *)
-      type 'f transferLb = Label.t -> 'f -> 'f
+      type 'f transferLb = (Var.t * Type.t) vector * Label.t -> 'f -> 'f
 
       (* propagate facts after a statement within a block *)
       type 'f transferSt = Statement.t -> 'f -> 'f
@@ -64,7 +90,7 @@ signature DATAFLOW_TREE =
       (* triple of transfer functions *)
       type 'f transfer = ('f transferLb * 'f transferSt * 'f transferTr)
 
-      (* helper combinator to package transfers *)
+      (* helper function to package transfers *)
       val mkTransfer : 'f transferLb ->
                        'f transferSt ->
                        'f transferTr ->

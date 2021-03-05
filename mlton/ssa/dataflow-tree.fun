@@ -26,22 +26,36 @@ struct
        | [] => NONE
 end
 
-structure Node = struct
-   datatype t = L of Label.t
-              | S of Statement.t
-              | T of Transfer.t
-end
+type prefix = {args: (Var.t * Type.t) vector,
+               label: Label.t,
+               statements: Statement.t vector}
 
-structure ReplaceNode = struct
-   datatype t = Blocks of {entry: Statement.t vector * Transfer.t,
-                           blocks: Block.t vector,
-                           return: Label.t * Statement.t vector}
-              | Statements of Statement.t vector
-              | Transfer of Transfer.t
-              | Empty
-end
+type suffix = {statements: Statement.t vector,
+               transfer: Transfer.t}
 
-type 'f rw = Node.t -> 'f -> ReplaceNode.t option
+type 'f rwLb = (Var.t * Type.t) vector * Label.t -> 'f ->
+               {blocks: Block.t list, prefix: prefix option}
+
+fun norwLb _ _ = {blocks = [], prefix = NONE}
+
+type 'f rwTr = Transfer.t -> 'f ->
+               {suffix: suffix option, blocks: Block.t list}
+
+fun norwTr _ _ = {suffix = NONE, blocks = []}
+
+datatype ReplaceSt = Statements of Statement.t vector
+                   | Graph of {suffix: suffix,
+                               blocks: Block.t list,
+                               prefix: prefix}
+
+type 'f rwSt = Statement.t -> 'f -> ReplaceSt option
+
+fun norwSt _ _ = NONE
+
+type 'f rw = ('f rwLb * 'f rwSt * 'f rwTr)
+
+(* helper function to package rewrite functions *)
+fun mkRw rwLb rwSt rwTr = (rwLb, rwSt, rwTr)
 
 datatype 'f rewrite = Doit of 'f rw
                     | Then of ('f rewrite * 'f rewrite)
@@ -53,7 +67,7 @@ fun thenRewrite r1 r2 = Then (r1, r2)
 fun iterRewrite r = Iter r
 fun deepRewrite r = Iter (Doit r)
 
-type 'f transferLb = Label.t -> 'f -> 'f
+type 'f transferLb = (Var.t * Type.t) vector * Label.t -> 'f -> 'f
 type 'f transferSt = Statement.t -> 'f -> 'f
 type 'f transferTr = Transfer.t -> 'f -> 'f FactBase.t
 
