@@ -38,7 +38,7 @@ signature DATAFLOW_TREE =
        * is a sequence of 0 or more blocks followed by a replacement closed/open
        * node and a sequence of 0 or more statements *)
       type 'f rwLb = (Var.t * Type.t) vector * Label.t -> 'f ->
-                     {blocks: Block.t list, prefix: prefix option}
+                     {blocks: Block.t list, prefix: prefix} option
 
       val norwLb : 'f rwLb
 
@@ -46,7 +46,7 @@ signature DATAFLOW_TREE =
        * sequence of 0 or more statements followed by a transfer and 0 or more
        * additional blocks *)
       type 'f rwTr = Transfer.t -> 'f ->
-                     {suffix: suffix option, blocks: Block.t list}
+                     {suffix: suffix, blocks: Block.t list} option
 
       val norwTr : 'f rwTr
 

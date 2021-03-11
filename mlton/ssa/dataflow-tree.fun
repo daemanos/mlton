@@ -34,14 +34,14 @@ type suffix = {statements: Statement.t vector,
                transfer: Transfer.t}
 
 type 'f rwLb = (Var.t * Type.t) vector * Label.t -> 'f ->
-               {blocks: Block.t list, prefix: prefix option}
+               {blocks: Block.t list, prefix: prefix} option
 
-fun norwLb _ _ = {blocks = [], prefix = NONE}
+fun norwLb _ _ = NONE
 
 type 'f rwTr = Transfer.t -> 'f ->
-               {suffix: suffix option, blocks: Block.t list}
+               {suffix: suffix, blocks: Block.t list} option
 
-fun norwTr _ _ = {suffix = NONE, blocks = []}
+fun norwTr _ _ = NONE
 
 datatype ReplaceSt = Statements of Statement.t vector
                    | Graph of {suffix: suffix,
