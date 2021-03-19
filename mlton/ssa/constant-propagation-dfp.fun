@@ -26,7 +26,7 @@ structure Fact = struct
    val top = Top
    val bot = Bot
 
-   fun join _ _ = NONE
+   fun join _ = NONE
 end
 
 open Fact
