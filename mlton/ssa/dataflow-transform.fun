@@ -212,10 +212,15 @@ let
             SOME (Graph.openL (DBlock.suffix suffix Fact.bot,
                                List.map (blocks, DBlock.fromBlock)))
 in
-   case n of
-      Node.Lb al => doitLb al
-    | Node.St st => doitSt st
-    | Node.Tr tr => doitTr tr
+   if !fuel > 0
+   then
+      (fuel := !fuel - 1;
+       case n of
+          Node.Lb al => doitLb al
+        | Node.St st => doitSt st
+        | Node.Tr tr => doitTr tr)
+   else
+      NONE
 end
 
 fun updLb rwLb (_,    rwSt, rwTr) = (rwLb, rwSt, rwTr)
