@@ -33,6 +33,22 @@ structure Node = struct
          Lb al => Cont ((#1 transfer) al f)
        | St st => Cont ((#2 transfer) st f)
        | Tr tr => Done ((#3 transfer) tr f)
+
+   fun entryLabels n =
+      case n of
+         Tr tr =>
+            let open Transfer
+            in case tr of
+                  Bug => raise Fail "???" (* FIXME *)
+                | Call {return, ...} => [] (* TODO propagate to other funcs? *)
+                | Case {cases, ...} =>
+                     Cases.fold (cases, [], fn (lb, lbs) => lb::lbs)
+                | Goto {dst, ...} => [dst]
+                | Runtime {return, ...} => [return]
+                | _ => []
+            end
+       | _ => []
+
 end
 
 structure DBlock = struct
@@ -231,7 +247,8 @@ let
          (* can only happen if a Graph has been constructed incorrectly *)
        | _ => raise Fail "analyzeAndRewrite_node"
    in case rewLoop rewrite n f of
-         SOME (g, rewrite') => analyzeAndRewrite rewrite' [] g (Cont f)
+         SOME (g, rewrite') =>
+            analyzeAndRewrite rewrite' (Node.entryLabels n) g (Cont f)
        | NONE => (Graph.singleton (n, f), Node.continue (n, f))
    end
 
