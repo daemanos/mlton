@@ -17,7 +17,6 @@ val fuel: int ref = ref 0
 fun checkpoint () = ()
 fun restart () = ()
 
-
 (* wrap facts and fact bases in a single datatype so they can be used in
  * recursive functions below *)
 datatype outfact = Cont of Fact.t
@@ -37,15 +36,12 @@ structure Node = struct
    fun entryLabels n =
       case n of
          Tr tr =>
-            let open Transfer
-            in case tr of
-                  Bug => raise Fail "???" (* FIXME *)
-                | Call {return, ...} => [] (* TODO propagate to other funcs? *)
-                | Case {cases, ...} =>
-                     Cases.fold (cases, [], fn (lb, lbs) => lb::lbs)
-                | Goto {dst, ...} => [dst]
-                | Runtime {return, ...} => [return]
-                | _ => []
+            let
+               val labels = ref []
+               fun doit label = labels := (label :: !labels)
+            in
+               (Transfer.foreachLabel (tr, doit);
+                !labels)
             end
        | _ => []
 
