@@ -22,6 +22,11 @@ signature DATAFLOW_TREE =
 
          val insert : 'a t -> (Label.t * 'a) -> 'a t
          val lookup : 'a t -> Label.t -> 'a option
+         val isMember : 'a t -> Label.t -> bool
+         val deleteList : Label.t list -> 'a t -> 'a t
+
+         val foldi : (Label.t * 'a -> 'b -> 'b) -> 'b -> 'a t -> 'b
+         val fold : ('a -> 'b -> 'b) -> 'b -> 'a t -> 'b
       end
 
       (* block prefix : arguments to the block, a label, and 0 or more

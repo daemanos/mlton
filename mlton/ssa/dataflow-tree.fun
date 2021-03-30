@@ -24,6 +24,16 @@ struct
             if Label.equals (l,l') then SOME a
             else lookup rest l
        | [] => NONE
+
+   fun isMember las l = isSome (lookup las l)
+
+   fun deleteList ls las =
+      List.keepAll
+      (las,
+       fn (l', _) => List.exists (ls, fn l => Label.equals (l', l)))
+
+   fun foldi f b0 las = List.fold (las, b0, fn ((l, a), b) => f (l, a) b)
+   fun fold f b0 las = List.fold (las, b0, fn ((_, a), b) => f a b)
 end
 
 type prefix = {args: (Var.t * Type.t) vector,
