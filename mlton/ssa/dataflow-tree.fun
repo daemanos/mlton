@@ -9,12 +9,50 @@ struct
 
 open S
 
+(* helper constructor for lattice types *)
+(* TODO probably put somewhere more relevant *)
+datatype 'f Poset = Top
+                  | Elt of 'f
+                  | Bot
+
+structure VarMapLattice = MapLattice (
+struct
+   type ord_key = Var.t
+   fun compare (u, v) =
+      if (Var.hash u) < (Var.hash v)
+      then LESS
+      else GREATER
+end)
+
 structure FactBase =
 struct
    type 'a t = (Label.t * 'a) list
 
    val empty = []
+   fun singleton la = [la]
    fun fromList las = las
+
+   fun fromCases (cases, default, fact, do_con) =
+   let
+      val default_la =
+         case default of
+            SOME label => [(label, fact)]
+          | _ => []
+   in
+      case cases of
+         Cases.Con conLabels =>
+            Vector.foldr
+            (conLabels,
+             default_la,
+             fn ((con, label), acc) =>
+                case do_con (con, label) of
+                   SOME fact' => (label, fact') :: acc
+                 | _ => (label, fact) :: acc)
+       | Cases.Word (sz, wordLabels) =>
+            List.append
+            (Vector.toListMap (wordLabels, fn (_, label) => (label, fact)),
+             default_la)
+   end
 
    fun insert las la = la::las
 
@@ -50,6 +88,11 @@ fun norwLb _ _ = NONE
 
 type 'f rwTr = Transfer.t -> 'f ->
                {suffix: suffix, blocks: Block.t list} option
+
+fun replaceTr tr =
+   SOME {suffix = {statements = Vector.new0 (),
+                   transfer = tr},
+         blocks = []}
 
 fun norwTr _ _ = NONE
 

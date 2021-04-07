@@ -13,12 +13,25 @@ signature DATAFLOW_TREE =
    sig
       include DATAFLOW_TREE_STRUCTS
 
+      (* helper constructor for lattice types *)
+      (* TODO probably put somewhere more relevant *)
+      datatype 'f Poset = Top
+                        | Elt of 'f
+                        | Bot
+
+      (* predefined map lattice for variables *)
+      structure VarMapLattice: MAP_LATTICE
+
       (* Fact definition *)
       structure FactBase : sig
          type 'a t
 
          val empty : 'a t
+         val singleton: Label.t * 'a -> 'a t
          val fromList: (Label.t * 'a) list -> 'a t
+
+         val fromCases: (Con.t, Label.t) Cases.t * Label.t option * 'a *
+                        (Con.t * Label.t -> 'a option) -> 'a t
 
          val insert : 'a t -> (Label.t * 'a) -> 'a t
          val lookup : 'a t -> Label.t -> 'a option
@@ -52,6 +65,8 @@ signature DATAFLOW_TREE =
        * additional blocks *)
       type 'f rwTr = Transfer.t -> 'f ->
                      {suffix: suffix, blocks: Block.t list} option
+
+      val replaceTr : Transfer.t -> {suffix: suffix, blocks: Block.t list} option
 
       val norwTr : 'f rwTr
 

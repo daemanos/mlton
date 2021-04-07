@@ -16,6 +16,7 @@ signature EUCLIDEAN_RING
 signature INTEGER
 signature INT_INF
 signature LIST
+signature MAP_LATTICE
 (* signature MONO_CONTAINER *)
 signature MONO_ENV
 signature OPTION
@@ -90,6 +91,7 @@ structure Lines
 structure List
 structure Layout
 structure List
+structure MapLattice
 (* structure MergeSortList *)
 (* structure MergeSortVector *)
 structure MLton

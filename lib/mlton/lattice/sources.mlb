@@ -38,4 +38,21 @@ in
       functor ThreePointLattice
       functor TwoPointLattice
    end
+
+   local
+      $(SML_LIB)/basis/basis.mlb
+      $(SML_LIB)/smlnj-lib/Util/smlnj-lib.mlb
+      ../basic/sources.mlb
+      ../set/sources.mlb
+
+      map-lattice.sig
+      map-lattice.fun
+   in
+      signature ORD_KEY
+      signature ORD_MAP
+      functor RedBlackMapFn
+
+      signature MAP_LATTICE
+      functor MapLattice
+   end
 end

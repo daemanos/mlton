@@ -20,6 +20,8 @@ ann "forceUsed" in
       signature INTEGER
       signature INT_INF
       signature LIST
+      signature ORD_KEY
+      signature MAP_LATTICE
       (* signature MONO_CONTAINER *)
       signature MONO_ENV
       signature OPTION
@@ -81,6 +83,7 @@ ann "forceUsed" in
       structure LargeWord
       structure Layout
       structure List
+      functor MapLattice
       (* structure MergeSortList *)
       (* structure MergeSortVector *)
       structure MLton
