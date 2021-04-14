@@ -29,6 +29,7 @@ signature DATAFLOW_TREE =
          val empty : 'a t
          val singleton: Label.t * 'a -> 'a t
          val fromList: (Label.t * 'a) list -> 'a t
+         val uniform: Label.t list * 'a -> 'a t
 
          val fromCases: (Con.t, Label.t) Cases.t * Label.t option * 'a *
                         (Con.t * Label.t -> 'a option) -> 'a t

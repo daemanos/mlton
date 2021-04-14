@@ -31,6 +31,7 @@ struct
    val empty = []
    fun singleton la = [la]
    fun fromList las = las
+   fun uniform (ls, a) = List.map (ls, fn l => (l, a))
 
    fun fromCases (cases, default, fact, do_con) =
    let

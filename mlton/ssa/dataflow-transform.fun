@@ -147,12 +147,14 @@ structure DBlock = struct
                      transfer = transfer}
        | _ => raise Fail "DBlock.toBlock"
 
-   fun fromBlock (Block.T {args, label, statements, transfer}) =
-      T {entryFact = Fact.bot,
+   fun fromBlock entryFact (Block.T {args, label, statements, transfer}) =
+      T {entryFact = entryFact,
          args = SOME args,
          label = SOME label,
          statements = statements,
          transfer = SOME transfer}
+
+   val fromBlockBot = fromBlock Fact.bot
 end
 
 structure Graph = struct
@@ -218,7 +220,7 @@ let
       case rwLb al f of
          NONE => NONE
        | SOME {blocks, prefix} =>
-            SOME (Graph.openR (List.map (blocks, DBlock.fromBlock),
+            SOME (Graph.openR (List.map (blocks, DBlock.fromBlockBot),
                                DBlock.prefix prefix Fact.bot))
 
    fun doitSt st =
@@ -227,7 +229,7 @@ let
       | SOME (Statements sts) => SOME (Graph.statements (sts, Fact.bot))
       | SOME (Graph {suffix, blocks, prefix}) =>
            SOME (Graph.openLR (DBlock.suffix suffix Fact.bot,
-                               List.map (blocks, DBlock.fromBlock),
+                               List.map (blocks, DBlock.fromBlockBot),
                                DBlock.prefix prefix Fact.bot))
 
    fun doitTr tr =
@@ -235,7 +237,7 @@ let
          NONE => NONE
        | SOME {suffix, blocks} =>
             SOME (Graph.openL (DBlock.suffix suffix Fact.bot,
-                               List.map (blocks, DBlock.fromBlock)))
+                               List.map (blocks, DBlock.fromBlockBot)))
 in
    if !fuel > 0
    then
@@ -268,199 +270,273 @@ in
    doit r SOME NONE
 end
 
-fun analyzeAndRewrite rewrite entries =
-let
-   fun node (n: Node.t, af: AccumFact.t) : (Graph.t * AccumFact.t) =
-   let val f = AccumFact.valOf af
-   in
-      case rewLoop rewrite n f of
-         SOME (g, rewrite') =>
-            analyzeAndRewrite rewrite' (Node.entryLabels n) g (AccumFact.Cont f)
-       | NONE => (Graph.singleton (n, f), Node.continue (n, f))
-   end
+fun transform (program: Program.t): Program.t =
+   let
+      val program as Program.T {datatypes, globals, functions, main} =
+         eliminateDeadBlocks program
 
-   and block (b: DBlock.t, f: AccumFact.t): (Graph.t * AccumFact.t) =
-      List.fold
-      (DBlock.nodes b,
-       (Graph.empty,
-        AccumFact.Cont
-        (case f of
-            AccumFact.Cont f => f
-          | AccumFact.Done fb =>
-               (case DBlock.label b of
-                   SOME label =>
-                      (case FactBase.lookup fb label of
-                          SOME f => f
-                        | NONE => Fact.bot)
-                 | NONE => Fact.bot))),
-       fn (n, (g, f)) =>
-          let val (g', f') = node (n, f)
-          in (Graph.splice g g', f')
+      val (transferLb, transferSt, transferTr) = transfer
+
+      (* Accumulate facts from globals *)
+      val fact0 =
+         Vector.fold
+         (globals, Fact.bot, fn (global, fact) => transferSt global fact)
+
+      (* Accumulate maps from labels to their arguments, associated blocks,
+       * and predecessor labels *)
+      val {get = labelArgs: Label.t -> (Var.t * Type.t) vector,
+           set = setLabelArgs, ...} =
+         Property.getSetOnce
+         (Label.plist, Property.initRaise ("labelArgs", Label.layout))
+      val {get = labelPreds: Label.t -> Label.t list,
+           set = setLabelPreds, ...} =
+         Property.getSet
+         (Label.plist, Property.initConst [])
+      val _ =
+         List.foreach
+         (functions, fn f =>
+          let
+             val {blocks, start, args, ...} = Function.dest f
+             val _ = setLabelArgs (start, args)
+          in
+             Vector.foreach
+             (blocks, fn Block.T {label, args, transfer, ...} =>
+              (setLabelArgs (label, args);
+               Transfer.foreachLabel
+               (transfer, fn label' =>
+                setLabelPreds (label, label' :: (labelPreds label)))))
           end)
 
-   and body (entries: Label.t list) blockmap (fbase0: Fact.t FactBase.t)
-      : Graph.t * AccumFact.t =
-   let
-      datatype ChangeFlag = Change | NoChange
+      val {get = labelDBlock: Label.t -> DBlock.t,
+           set = setLabelDBlock, ...} =
+         Property.getSet
+         (Label.plist, Property.initRaise ("labelDBlock", Label.layout))
 
-      fun updateFact labels (label, fact') (cha, fbase) =
+      (* Main analysis + rewriting *)
+      fun analyzeAndRewrite rewrite entries =
       let
-         val fact = getOpt (FactBase.lookup fbase label, Fact.bot)
-      in
-         case Fact.join (fact, fact') of
-            NONE => (cha, fbase)
-          | SOME fact'' =>
-               (if LabelSet.contains (labels, label)
-                then Change
-                else cha,
-                FactBase.insert fbase (label, fact''))
-      end
-
-      datatype TxFactBase
-         = TxFB of {tfb_fbase: Fact.t FactBase.t,
-                    tfb_rg: Graph.t,
-                    tfb_cha: ChangeFlag,
-                    tfb_labels: LabelSet.t}
-
-      (* TODO put elsewhere *)
-      datatype Direction = Fwd | Bwd
-
-      fun fixpoint direction do_block blocks fbase0 =
-      let
-         val is_fwd =
-            case direction of
-               Fwd => true
-             | Bwd => false
-
-         val tagged_blocks =
-            List.map
-            (blocks,
-             fn b =>
-                (* label is required to be present here *)
-                ((valOf (DBlock.label b), b),
-                 if is_fwd
-                 then [valOf (DBlock.label b)]
-                 else DBlock.successors b))
-
-         fun tx_block label block in_labels
-             (TxFB {tfb_fbase = fbase,
-                    tfb_labels = labels,
-                    tfb_rg = blocks,
-                    tfb_cha = cha}) =
-         let
-            val labels' = LabelSet.union (labels, LabelSet.fromList in_labels)
+         fun node (n: Node.t, af: AccumFact.t) : (Graph.t * AccumFact.t) =
+         let val f = AccumFact.valOf af
          in
-            if is_fwd andalso not (FactBase.isMember fbase label)
-            then
-               TxFB {tfb_fbase = fbase,
-                     tfb_labels = labels',
-                     tfb_rg = blocks,
-                     tfb_cha = cha}
-            else
-               let
-                  val (rg, out_facts) =
-                     case do_block (block, fbase) of
-                        (rg, AccumFact.Done out_facts) => (rg, out_facts)
-                      | _ => raise Fail "analyzeAndRewrite_fixpoint [do_block]"
-
-                  val (cha', fbase') =
-                     FactBase.foldi
-                     (updateFact labels)
-                     (cha, fbase)
-                     out_facts
-               in
-                  TxFB {tfb_labels = labels',
-                        tfb_rg = Graph.splice rg blocks,
-                        tfb_fbase = fbase',
-                        tfb_cha = cha'}
-               end
+            case rewLoop rewrite n f of
+               SOME (g, rewrite') =>
+                  analyzeAndRewrite rewrite' (Node.entryLabels n) g (AccumFact.Cont f)
+             | NONE => (Graph.singleton (n, f), Node.continue (n, f))
          end
+         and block (b: DBlock.t, f: AccumFact.t): (Graph.t * AccumFact.t) =
+            List.fold
+            (DBlock.nodes b,
+             (Graph.empty,
+              AccumFact.Cont
+              (case f of
+                  AccumFact.Cont f => f
+                | AccumFact.Done fb =>
+                     (case DBlock.label b of
+                         SOME label =>
+                            (case FactBase.lookup fb label of
+                                SOME f => f
+                              | NONE => Fact.bot)
+                       | NONE => Fact.bot))),
+             fn (n, (g, f)) =>
+                let val (g', f') = node (n, f)
+                in (Graph.splice g g', f')
+                end)
+         and body (entries: Label.t list) blockmap (fbase0: Fact.t FactBase.t)
+            : Graph.t * AccumFact.t =
+         let
+            datatype ChangeFlag = Change | NoChange
 
-         fun tx_blocks bs tx_fb =
-            case bs of
-               [] => tx_fb
-             | (((label, block), in_labels) :: bs) =>
-                  tx_blocks bs (tx_block label block in_labels tx_fb)
-
-         fun loop fbase =
+            fun updateFact labels (label, fact') (cha, fbase) =
             let
-               val save = checkpoint ()
-               val init_tx =
-                  TxFB {tfb_fbase = fbase,
-                        tfb_cha = NoChange,
-                        tfb_rg = Graph.emptyC,
-                        tfb_labels = LabelSet.empty}
-
-               val TxFB tx_fb = tx_blocks tagged_blocks init_tx
+               val fact = getOpt (FactBase.lookup fbase label, Fact.bot)
             in
-               case #tfb_cha tx_fb of
-                  NoChange => tx_fb
-                | SomeChange => (restart save; loop (#tfb_fbase tx_fb))
+               case Fact.join (fact, fact') of
+                  NONE => (cha, fbase)
+                | SOME fact'' =>
+                     (if LabelSet.contains (labels, label)
+                      then Change
+                      else cha,
+                      FactBase.insert fbase (label, fact''))
             end
 
-         val tx_fb = loop fbase0
+            datatype TxFactBase
+               = TxFB of {tfb_fbase: Fact.t FactBase.t,
+                          tfb_rg: Graph.t,
+                          tfb_cha: ChangeFlag,
+                          tfb_labels: LabelSet.t}
+
+            (* TODO put elsewhere *)
+            datatype Direction = Fwd | Bwd
+
+            fun fixpoint direction do_block blocks fbase0 =
+            let
+               val is_fwd =
+                  case direction of
+                     Fwd => true
+                   | Bwd => false
+
+               val tagged_blocks =
+                  List.map
+                  (blocks,
+                   fn b =>
+                      (* label is required to be present here *)
+                      ((valOf (DBlock.label b), b),
+                       if is_fwd
+                       then [valOf (DBlock.label b)]
+                       else DBlock.successors b))
+
+               fun tx_block label block in_labels
+                   (TxFB {tfb_fbase = fbase,
+                          tfb_labels = labels,
+                          tfb_rg = blocks,
+                          tfb_cha = cha}) =
+               let
+                  val labels' = LabelSet.union (labels, LabelSet.fromList in_labels)
+               in
+                  if is_fwd andalso not (FactBase.isMember fbase label)
+                  then
+                     TxFB {tfb_fbase = fbase,
+                           tfb_labels = labels',
+                           tfb_rg = blocks,
+                           tfb_cha = cha}
+                  else
+                     let
+                        val (rg, out_facts) =
+                           case do_block (block, fbase) of
+                              (rg, AccumFact.Done out_facts) => (rg, out_facts)
+                            | _ => raise Fail "analyzeAndRewrite_fixpoint [do_block]"
+
+                        val (cha', fbase') =
+                           FactBase.foldi
+                           (updateFact labels)
+                           (cha, fbase)
+                           out_facts
+                     in
+                        TxFB {tfb_labels = labels',
+                              tfb_rg = Graph.splice rg blocks,
+                              tfb_fbase = fbase',
+                              tfb_cha = cha'}
+                     end
+               end
+
+               fun tx_blocks bs tx_fb =
+                  case bs of
+                     [] => tx_fb
+                   | (((label, block), in_labels) :: bs) =>
+                        tx_blocks bs (tx_block label block in_labels tx_fb)
+
+               fun loop fbase =
+                  let
+                     val save = checkpoint ()
+                     val init_tx =
+                        TxFB {tfb_fbase = fbase,
+                              tfb_cha = NoChange,
+                              tfb_rg = Graph.emptyC,
+                              tfb_labels = LabelSet.empty}
+
+                     val TxFB tx_fb = tx_blocks tagged_blocks init_tx
+                  in
+                     case #tfb_cha tx_fb of
+                        NoChange => tx_fb
+                      | SomeChange => (restart save; loop (#tfb_fbase tx_fb))
+                  end
+
+               val tx_fb = loop fbase0
+            in
+               (#tfb_rg tx_fb,
+                AccumFact.Done
+                (FactBase.deleteList
+                 (List.map (tagged_blocks, #1 o #1))
+                 (#tfb_fbase tx_fb)))
+            end
+
+            fun getFact (label, fb) =
+               AccumFact.Cont
+               (case FactBase.lookup fb label of
+                   SOME fact => fact
+                 | NONE => Fact.bot)
+         in
+            (* TODO implement backward analysis *)
+            fixpoint Fwd
+            (fn (b, fb) => block (b, (getFact (valOf (DBlock.label b), fb))))
+            (* FIXME need to make sure labelDBlock gets updated when necessary *)
+            (List.map (entries, labelDBlock))
+            fbase0
+         end
+         and graph (g: Graph.t) (f: AccumFact.t): Graph.t * AccumFact.t =
+            case g of
+               Graph.Nil => (Graph.Nil, f)
+             | Graph.Unit b => block (b, f)
+             | Graph.Many (left, blocks, right) =>
+                  let
+                     val (g', f') =
+                        case left of
+                           SOME b =>
+                              (case block (b, f) of
+                                  (g, AccumFact.Done fb) =>
+                                    let
+                                       val (g', f') =
+                                          body (DBlock.successors b) blocks fb
+                                    in
+                                       (Graph.splice g g', f')
+                                    end
+                                  (* can only happen if the left edge doesn't have a
+                                   * transfer *)
+                                | _ => raise Fail "analyzeAndRewrite_graph")
+                         | NONE =>
+                              (case f of
+                                  AccumFact.Done fb => body entries blocks fb
+                                | _ => raise Fail "analyzeAndRewrite_graph")
+                     val (g', f') =
+                        case right of
+                           SOME b =>
+                              let val (g'', f'') = block (b, f')
+                              in (Graph.splice g' g'', f'')
+                              end
+                         | NONE => (g', f')
+                  in
+                     (g', f')
+                  end
       in
-         (#tfb_rg tx_fb,
-          AccumFact.Done
-          (FactBase.deleteList
-           (List.map (tagged_blocks, #1 o #1))
-           (#tfb_fbase tx_fb)))
+         graph
       end
 
-      fun getFact (label, fb) =
-         AccumFact.Cont
-         (case FactBase.lookup fb label of
-             SOME fact => fact
-           | NONE => Fact.bot)
-
-      (* TODO *)
-      fun forwardBlockList entries blockmap = []
+      val functions =
+         List.map
+         (functions, fn f =>
+          let
+             val {args, blocks, mayInline, name, raises, returns, start} =
+                Function.dest f
+             val dblocks =
+                Vector.toListMap
+                (blocks, fn (block as Block.T {label, ...}) =>
+                 let
+                    val dblock = DBlock.fromBlock fact0 block
+                    val _ = setLabelDBlock (label, dblock)
+                 in
+                    dblock
+                 end)
+             val body = Graph.closed dblocks
+             val labels = Vector.toListMap (blocks, Block.label)
+             val af0 = AccumFact.Done (FactBase.uniform (labels, fact0))
+             val (body, _) = analyzeAndRewrite rewrite [start] body af0
+             val dblocks =
+                case body of
+                   Graph.Many (NONE, dblocks, NONE) => dblocks
+                 | _ => raise Fail "dataflowTransform_openOnExit"
+             val blocks = Vector.fromListMap (dblocks, DBlock.toBlock)
+          in
+             Function.new
+             {args = args,
+              blocks = blocks,
+              mayInline = mayInline,
+              name = name,
+              raises = raises,
+              returns = returns,
+              start = start}
+          end)
    in
-      (* TODO implement backward analysis *)
-      fixpoint Fwd
-      (fn (b, fb) => block (b, (getFact (valOf (DBlock.label b), fb))))
-      (forwardBlockList entries blockmap)
-      fbase0
+      program
    end
-
-   and graph (g: Graph.t) (f: AccumFact.t): Graph.t * AccumFact.t =
-      case g of
-         Graph.Nil => (Graph.Nil, f)
-       | Graph.Unit b => block (b, f)
-       | Graph.Many (left, blocks, right) =>
-            let
-               val (g1, fb1) =
-                  case left of
-                     SOME b =>
-                        (case block (b, f) of
-                            (g, AccumFact.Done fb) => (g, AccumFact.Done fb)
-                            (* can only happen if the left edge doesn't have a
-                             * transfer *)
-                          | _ => raise Fail "analyzeAndRewrite_graph")
-                   | NONE => (Graph.Nil, AccumFact.Done FactBase.empty)
-
-               val (g2, fb2) =
-                  List.fold (blocks, (g1, fb1),
-                             fn (b, (g, f)) =>
-                                let val (g', f') = block (b, f)
-                                in (Graph.splice g g', f')
-                                end)
-
-               val (g', f') =
-                  case right of
-                     SOME b =>
-                        let val (g3, f') = block (b, fb2)
-                        in (Graph.splice g2 g3, f')
-                        end
-                   | NONE => (g2, fb2)
-            in
-               (g', f')
-            end
-in
-   graph
-end
-
-
-fun transform p = p
 
 end
