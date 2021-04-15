@@ -284,10 +284,6 @@ fun transform (program: Program.t): Program.t =
 
       (* Accumulate maps from labels to their arguments, associated blocks,
        * and predecessor labels *)
-      val {get = labelArgs: Label.t -> (Var.t * Type.t) vector,
-           set = setLabelArgs, ...} =
-         Property.getSetOnce
-         (Label.plist, Property.initRaise ("labelArgs", Label.layout))
       val {get = labelPreds: Label.t -> Label.t list,
            set = setLabelPreds, ...} =
          Property.getSet

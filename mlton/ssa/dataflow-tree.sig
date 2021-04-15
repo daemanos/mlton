@@ -13,6 +13,11 @@ signature DATAFLOW_TREE =
    sig
       include DATAFLOW_TREE_STRUCTS
 
+      (* Properties of the program; will be initialized by DataflowTransform
+       * before any analysis is performed *)
+      val labelArgs : Label.t -> (Var.t * Type.t) vector
+      val setLabelArgs : Label.t * (Var.t * Type.t) vector -> unit
+
       (* helper constructor for lattice types *)
       (* TODO probably put somewhere more relevant *)
       datatype 'f Poset = Top
@@ -80,6 +85,8 @@ signature DATAFLOW_TREE =
        * sequence of 0 or more statements or a new block suffix followed by any
        * number of additional blocks and a new block prefix *)
       type 'f rwSt = Statement.t -> 'f -> ReplaceSt option
+
+      val replaceSt1 : Statement.t -> ReplaceSt option
 
       val norwSt : 'f rwSt
 

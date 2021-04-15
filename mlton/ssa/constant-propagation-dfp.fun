@@ -21,7 +21,6 @@ structure Lattice = VarMapLattice
 structure ConstValue =
 struct
    datatype t = Const of Const.t
-                (* restricted to only enum-like (no args) for now *)
               | ConApp of {con: Con.t, args: t vector}
 
    fun equals (c1, c2) =
@@ -34,41 +33,33 @@ struct
 
    fun join (old, new) =
       case (old, new) of
-         (Elt oldConst, Elt newConst) =>
+         (Bot, _) => SOME new
+       | (_, Bot) => SOME old
+       | (Elt oldConst, Elt newConst) =>
             if equals (oldConst, newConst)
             then NONE
             else SOME Top
        | _ => SOME Top
 
-   fun fromExp exp =
-      case exp of
-         Exp.Const c => SOME (Const c)
-       | Exp.ConApp {con, args} =>
-            if Vector.isEmpty args
-            then SOME (ConApp {con = con, args = Vector.new0 ()})
-            else NONE
-            (*let
-               val args' =
-                  Vector.keepAllMap
-                  (args,
-                   fn var =>
-                      case Lattice.find (lat, var) of
-                         SOME (Elt c) => SOME c
-                       | _ => NONE)
-            in
-               if (Vector.size args') = (Vector.size args)
-               then SOME (ConApp {con = con, args = args'})
-               else NONE
-            end*)
-       | _ => NONE
-
-   fun toExp const =
+   fun toExp (const, f) =
       case const of
          Const c => Exp.Const c
-       | ConApp {con, ...} =>
-            Exp.ConApp
-            {con = con,
-             args = Vector.new0 ()}
+       | ConApp _ =>
+            let
+               val candidates =
+                  Lattice.filter
+                  (fn elt =>
+                   case elt of
+                      Elt const' => equals (const', const)
+                    | _ => false) f
+            in
+               case Lattice.firsti candidates of
+                  SOME (var, _) => Exp.Var var
+                | _ => raise Fail "ConstValue.toExp"
+            end
+
+   fun toStatement (const, f, var, ty) =
+      Statement.T {var = SOME var, ty = ty, exp = toExp (const, f)}
 end
 
 structure Fact = struct
@@ -77,6 +68,13 @@ structure Fact = struct
 
    val bot = Lattice.empty
    val join = Lattice.join ConstValue.join
+
+   fun findAll (f, vars) =
+      Vector.keepAllMap
+      (vars, fn var =>
+       case Lattice.find (f, var) of
+          SOME (Elt c) => SOME c
+        | _ => NONE)
 end
 
 (* For now mostly based on example in Hoopl paper *)
@@ -90,9 +88,23 @@ local
       fun st s f =
          case Statement.var s of
             SOME var =>
-               (case ConstValue.fromExp (Statement.exp s) of
-                   SOME c => Lattice.insert (f, var, Elt c)
-                 | _      => Lattice.insert (f, var, Top))
+               let
+                  val constOrTop =
+                     case Statement.exp s of
+                        Exp.Const c => Elt (ConstValue.Const c)
+                      | Exp.ConApp {con, args} =>
+                           let
+                              val args' = Fact.findAll (f, args)
+                           in
+                              if (Vector.size args') = (Vector.size args)
+                              then Elt (ConstValue.ConApp
+                                        {con = con, args = args'})
+                              else Top
+                           end
+                      | _ => Top
+               in
+                  Lattice.insert (f, var, constOrTop)
+               end
           | NONE => f
 
       fun tr t f =
@@ -103,13 +115,22 @@ local
              | Case {test, cases, default} =>
                   FactBase.fromCases
                   (cases, default, f,
-                   fn (con, _) =>
-                      SOME
-                      (Lattice.insert
-                       (f, test,
-                        Elt (ConstValue.ConApp
-                             {con = con,
-                              args = Vector.new0 ()}))))
+                   fn (con, label) =>
+                      let
+                         val (args, _) = Vector.unzip (labelArgs label)
+                         val args' = Fact.findAll (f, args)
+                      in
+                         if (Vector.size args) = (Vector.size args')
+                         then
+                            SOME
+                            (Lattice.insert
+                             (f, test,
+                              Elt (ConstValue.ConApp
+                                   {con = con,
+                                    args = args'})))
+                         else
+                            NONE
+                      end)
              | _ => FactBase.empty
          end
    in
@@ -125,13 +146,7 @@ local
             Statement.T {var = SOME var, ty, ...} =>
                (case Lattice.find (f, var) of
                    SOME (Elt c) =>
-                     SOME
-                     (Statements
-                      (Vector.new1
-                       (Statement.T
-                        {var = SOME var,
-                         ty = ty,
-                         exp = ConstValue.toExp c})))
+                     replaceSt1 (ConstValue.toStatement (c, f, var, ty))
                  | _ => NONE)
           | _ => NONE
 
@@ -142,7 +157,27 @@ local
 
    val simplify : Fact.t rewrite =
    let
-      val lb = norwLb
+      fun lb (args, label) f =
+         let
+            val (args, statements) =
+               Vector.mapAndFold
+               (args, [], fn ((var, ty), sts) =>
+                case Lattice.find (f, var) of
+                   SOME (Elt c) =>
+                   let
+                      val arg' = (Var.new var, ty)
+                      val st = ConstValue.toStatement (c, f, var, ty)
+                   in
+                      (arg', st::sts)
+                   end
+                 | _ => ((var, ty), sts))
+            val prefix =
+               {args = args,
+                label = label,
+                statements = Vector.fromListRev statements}
+         in
+            SOME {blocks = [], prefix = prefix}
+         end
 
       (* TODO more simplification *)
       val st = norwSt
@@ -153,16 +188,25 @@ local
                (case Lattice.find (f, test) of
                    SOME (Elt (ConstValue.ConApp {con, ...})) =>
                      let
-                        val Cases.Con cases = cases
-                        val SOME (_, label) =
-                           Vector.peek
-                           (cases,
-                            fn (con', _) => Con.equals (con, con'))
+                        val cases =
+                           case cases of
+                              Cases.Con cases => cases
+                            | _ => raise Fail "constantPropagationDFP_simplify"
+
+                        val dst =
+                           case Vector.peek
+                                (cases, fn (con', _) =>
+                                 Con.equals (con, con')) of
+                              SOME (_, label) => SOME label
+                            | _ => default
                      in
-                        replaceTr
-                        (Transfer.Goto
-                         {dst = label,
-                          args = Vector.new0 ()})
+                        case dst of
+                           SOME dst =>
+                              replaceTr
+                              (Transfer.Goto
+                               {dst = dst,
+                                args = Vector.new0 ()})
+                         | _ => NONE
                      end
                  | _ => NONE)
           | _ => NONE

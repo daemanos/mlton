@@ -9,6 +9,11 @@ struct
 
 open S
 
+val {get = labelArgs: Label.t -> (Var.t * Type.t) vector,
+     set = setLabelArgs, ...} =
+   Property.getSetOnce
+   (Label.plist, Property.initRaise ("labelArgs", Label.layout))
+
 (* helper constructor for lattice types *)
 (* TODO probably put somewhere more relevant *)
 datatype 'f Poset = Top
@@ -103,6 +108,8 @@ datatype ReplaceSt = Statements of Statement.t vector
                                prefix: prefix}
 
 type 'f rwSt = Statement.t -> 'f -> ReplaceSt option
+
+fun replaceSt1 st = SOME (Statements (Vector.new1 st))
 
 fun norwSt _ _ = NONE
 
