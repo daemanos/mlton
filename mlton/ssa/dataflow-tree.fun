@@ -11,7 +11,7 @@ open S
 
 val {get = labelArgs: Label.t -> (Var.t * Type.t) vector,
      set = setLabelArgs, ...} =
-   Property.getSetOnce
+   Property.getSet
    (Label.plist, Property.initRaise ("labelArgs", Label.layout))
 
 (* helper constructor for lattice types *)
