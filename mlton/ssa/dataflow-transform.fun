@@ -216,24 +216,42 @@ let
       case rwLb al f of
          NONE => NONE
        | SOME {blocks, prefix} =>
-            SOME (Graph.openR (List.map (blocks, DBlock.fromBlockBot),
-                               DBlock.prefix prefix Fact.bot))
+            let
+               val {label, args, ...} = prefix
+               val () = setLabelArgs (label, args)
+
+               val blocks = List.map (blocks, DBlock.fromBlockBot)
+               val prefix = DBlock.prefix prefix Fact.bot
+            in
+               SOME (Graph.openR (blocks, prefix))
+            end
 
    fun doitSt st =
       case rwSt st f of
         NONE => NONE
       | SOME (Statements sts) => SOME (Graph.statements (sts, Fact.bot))
       | SOME (Graph {suffix, blocks, prefix}) =>
-           SOME (Graph.openLR (DBlock.suffix suffix Fact.bot,
-                               List.map (blocks, DBlock.fromBlockBot),
-                               DBlock.prefix prefix Fact.bot))
+           let
+              val {label, args, ...} = prefix
+              val () = setLabelArgs (label, args)
+
+              val suffix = DBlock.suffix suffix Fact.bot
+              val blocks = List.map (blocks, DBlock.fromBlockBot)
+              val prefix = DBlock.prefix prefix Fact.bot
+           in
+              SOME (Graph.openLR (suffix, blocks, prefix))
+           end
 
    fun doitTr tr =
       case rwTr tr f of
          NONE => NONE
        | SOME {suffix, blocks} =>
-            SOME (Graph.openL (DBlock.suffix suffix Fact.bot,
-                               List.map (blocks, DBlock.fromBlockBot)))
+            let
+               val suffix = DBlock.suffix suffix Fact.bot
+               val blocks = List.map (blocks, DBlock.fromBlockBot)
+            in
+               SOME (Graph.openL (suffix, blocks))
+            end
 in
    if !fuel > 0
    then
