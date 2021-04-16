@@ -54,7 +54,7 @@ struct
                 case do_con (con, label) of
                    SOME fact' => (label, fact') :: acc
                  | _ => (label, fact) :: acc)
-       | Cases.Word (sz, wordLabels) =>
+       | Cases.Word (_, wordLabels) =>
             List.append
             (Vector.toListMap (wordLabels, fn (_, label) => (label, fact)),
              default_la)

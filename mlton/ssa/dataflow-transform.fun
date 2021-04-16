@@ -54,7 +54,6 @@ structure Node = struct
                 !labels)
             end
        | _ => []
-
 end
 
 structure DBlock = struct
@@ -68,10 +67,8 @@ structure DBlock = struct
       fun make f (T r) = f r
    in
       val entryFact = make #entryFact
-      val args = make #args
       val label = make #label
       val statements = make #statements
-      val transfer = make #transfer
    end
 
    fun nodes (T {args, label, statements, transfer, ...}) =
@@ -173,7 +170,7 @@ structure Graph = struct
    fun openR (blocks, right) = Many (NONE, blocks, SOME right)
    fun openLR (left, blocks, right) = Many (SOME left, blocks, SOME right)
 
-   fun entryLabel g =
+   (*fun entryLabel g =
       case g of
          Many (NONE, b :: _, _) => DBlock.label b
        | _ => NONE
@@ -184,7 +181,7 @@ structure Graph = struct
             (case List.rev body of
                 b :: _ => DBlock.successors b
               | _ => [])
-       | _ => []
+       | _ => []*)
 
    (* FIXME better error messages for failures *)
    (* failures can only happen if a Unit has been constructed incorrectly or
@@ -210,7 +207,6 @@ structure Graph = struct
        | (Many (left, body1, NONE), Many (NONE, body2, right)) =>
             Many (left, body1 @ body2, right)
        | _ => raise Fail "Graph.splice"
-
 end
 
 fun rewriteNode (rwLb, rwSt, rwTr) n f =
@@ -250,10 +246,6 @@ in
       NONE
 end
 
-fun updLb rwLb (_,    rwSt, rwTr) = (rwLb, rwSt, rwTr)
-fun updSt rwSt (rwLb, _,    rwTr) = (rwLb, rwSt, rwTr)
-fun updTr rwTr (rwLb, rwSt, _   ) = (rwLb, rwSt, rwTr)
-
 fun rewLoop r node f =
 let
    fun add rw' (rn, rw) = (rn, Then (rw, rw'))
@@ -272,10 +264,10 @@ end
 
 fun transform (program: Program.t): Program.t =
    let
-      val program as Program.T {datatypes, globals, functions, main} =
+      val Program.T {datatypes, globals, functions, main} =
          eliminateDeadBlocks program
 
-      val (transferLb, transferSt, transferTr) = transfer
+      val (_, transferSt, _) = transfer
 
       (* Accumulate facts from globals *)
       val fact0 =
@@ -302,11 +294,6 @@ fun transform (program: Program.t): Program.t =
                (transfer, fn label' =>
                 setLabelPreds (label, label' :: (labelPreds label)))))
           end)
-
-      val {get = labelDBlock: Label.t -> DBlock.t,
-           set = setLabelDBlock, ...} =
-         Property.getSet
-         (Label.plist, Property.initRaise ("labelDBlock", Label.layout))
 
       (* Main analysis + rewriting *)
       fun analyzeAndRewrite rewrite entries =
@@ -337,7 +324,7 @@ fun transform (program: Program.t): Program.t =
                 let val (g', f') = node (n, f)
                 in (Graph.splice g g', f')
                 end)
-         and body (entries: Label.t list) blockmap (fbase0: Fact.t FactBase.t)
+         and body (entries: Label.t list) blocks (fbase0: Fact.t FactBase.t)
             : Graph.t * AccumFact.t =
          let
             datatype ChangeFlag = Change | NoChange
@@ -434,7 +421,7 @@ fun transform (program: Program.t): Program.t =
                   in
                      case #tfb_cha tx_fb of
                         NoChange => tx_fb
-                      | SomeChange => (restart save; loop (#tfb_fbase tx_fb))
+                      | Change => (restart save; loop (#tfb_fbase tx_fb))
                   end
 
                val tx_fb = loop fbase0
@@ -451,12 +438,20 @@ fun transform (program: Program.t): Program.t =
                (case FactBase.lookup fb label of
                    SOME fact => fact
                  | NONE => Fact.bot)
+
+            fun blockLabelEquals label block =
+               case DBlock.label block of
+                    SOME label' => Label.equals (label, label')
+                  | _ => false
          in
             (* TODO implement backward analysis *)
             fixpoint Fwd
             (fn (b, fb) => block (b, (getFact (valOf (DBlock.label b), fb))))
-            (* FIXME need to make sure labelDBlock gets updated when necessary *)
-            (List.map (entries, labelDBlock))
+            (List.map
+             (entries, fn label =>
+              case List.peek (blocks, blockLabelEquals label) of
+                 SOME block => block
+               | NONE => raise Fail "fixpoint_blockNotFound"))
             fbase0
          end
          and graph (g: Graph.t) (f: AccumFact.t): Graph.t * AccumFact.t =
@@ -505,13 +500,7 @@ fun transform (program: Program.t): Program.t =
                 Function.dest f
              val dblocks =
                 Vector.toListMap
-                (blocks, fn (block as Block.T {label, ...}) =>
-                 let
-                    val dblock = DBlock.fromBlock fact0 block
-                    val _ = setLabelDBlock (label, dblock)
-                 in
-                    dblock
-                 end)
+                (blocks, fn block => DBlock.fromBlock fact0 block)
              val body = Graph.closed dblocks
              val labels = Vector.toListMap (blocks, Block.label)
              val af0 = AccumFact.Done (FactBase.uniform (labels, fact0))
@@ -531,6 +520,12 @@ fun transform (program: Program.t): Program.t =
               returns = returns,
               start = start}
           end)
+      val program =
+         Program.T
+         {datatypes = datatypes,
+          globals= globals,
+          functions = functions,
+          main = main}
    in
       program
    end
