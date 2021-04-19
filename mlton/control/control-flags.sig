@@ -454,6 +454,8 @@ signature CONTROL_FLAGS =
       (* Show def-use information. *)
       val showDefUse: File.t option ref
 
+      val showEntryFacts: bool ref
+
       (* Should types be printed in ILs. *)
       val showTypes: bool ref
 

@@ -1512,6 +1512,10 @@ val showDefUse = control {name = "show def-use",
                           default = NONE,
                           toString = Option.toString File.toString}
 
+val showEntryFacts = control {name = "show-entry-facts",
+                              default = false,
+                              toString = Bool.toString}
+
 val showTypes = control {name = "show types",
                          default = true,
                          toString = Bool.toString}

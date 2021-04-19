@@ -96,6 +96,10 @@ structure DBlock = struct
    fun layout (T {entryFact, args, label, statements, transfer}) =
       let
          open Layout
+         val tag =
+            if !Control.showEntryFacts
+            then seq [str "dblock(", Fact.layout entryFact, str ") "]
+            else str "dblock "
          val labelArgsLayout =
             case (label, args) of
                (SOME label, SOME args) =>
@@ -108,8 +112,7 @@ structure DBlock = struct
                SOME transfer => Transfer.layout transfer
              | _ => empty
       in
-         align [seq [str "dblock(", Fact.layout entryFact, str ") ",
-                     labelArgsLayout],
+         align [seq [tag, labelArgsLayout],
                 indent (align [statementsLayout, transferLayout], 2)]
       end
 
@@ -246,8 +249,6 @@ structure Graph = struct
                end
       end
 
-   val toString = Layout.toString o layout
-
    (*fun entryLabel g =
       case g of
          Many (NONE, b :: _, _) => DBlock.label b
@@ -261,10 +262,20 @@ structure Graph = struct
               | _ => [])
        | _ => []*)
 
+   (* resolve degenerate Many instances to Unit/Nil *)
+   fun simplify g =
+      case g of
+         Many (NONE, [], NONE) => Nil
+       | Many (NONE, [b], NONE) => Unit b
+       | _ => g
+
    (* failures can only happen if a Unit has been constructed incorrectly or
     * if splice is applied to incompatible arguments *)
    fun splice g1 g2 =
       let
+         val g1 = simplify g1
+         val g2 = simplify g2
+
          fun fail msg =
          let
             val layout1 = layout g1
