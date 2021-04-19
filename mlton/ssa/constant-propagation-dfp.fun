@@ -60,6 +60,21 @@ struct
 
    fun toStatement (const, f, var, ty) =
       Statement.T {var = SOME var, ty = ty, exp = toExp (const, f)}
+
+   fun layout const =
+      let
+         val layoutArgs = Vector.layout layout
+         open Layout
+      in
+         case const of
+            Const c => Const.layout c
+          | ConApp {con, args} =>
+               seq [str "con ",
+                    Con.layout con,
+                    if Vector.isEmpty args
+                    then empty
+                    else seq [str " ", layoutArgs args]]
+      end
 end
 
 structure Fact = struct
@@ -75,6 +90,8 @@ structure Fact = struct
        case Lattice.find (f, var) of
           SOME (Elt c) => SOME c
         | _ => NONE)
+
+   fun layout f = Lattice.layout' (f, layoutPoset ConstValue.layout)
 end
 
 (* For now mostly based on example in Hoopl paper *)

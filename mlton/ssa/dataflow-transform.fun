@@ -27,6 +27,19 @@ end
 
 structure LabelSet = UnorderedSet (Label)
 
+(* not sure why this is not available in scope from ssa-tree *)
+local
+   open Layout
+in
+   fun layoutFormals (xts: (Var.t * Type.t) vector) =
+      Vector.layout (fn (x, t) =>
+                     if !Control.showTypes
+                        then mayAlign [seq [Var.layout x, str ":"],
+                                       indent (Type.layout t, 2)]
+                        else Var.layout x)
+      xts
+end
+
 structure Node = struct
    datatype t = Lb of (Var.t * Type.t) vector * Label.t
               | St of Statement.t
@@ -49,6 +62,20 @@ structure Node = struct
                 !labels)
             end
        | _ => []
+
+   fun layout n =
+      let
+         open Layout
+         val (tag, obj) =
+            case n of
+               Lb (args, label) =>
+                  (str "Lb",
+                   seq [Label.layout label, str " ", layoutFormals args])
+             | St statement => (str "St", Statement.layout statement)
+             | Tr transfer => (str "Tr", Transfer.layout transfer)
+      in
+         compact (seq [tag, str "[", obj, str "]"])
+      end
 end
 
 structure DBlock = struct
@@ -65,6 +92,27 @@ structure DBlock = struct
       val label = make #label
       val statements = make #statements
    end
+
+   fun layout (T {entryFact, args, label, statements, transfer}) =
+      let
+         open Layout
+         val labelArgsLayout =
+            case (label, args) of
+               (SOME label, SOME args) =>
+                  seq [Label.layout label, str " ", layoutFormals args]
+             | _ => empty
+         val statementsLayout =
+            align (Vector.toListMap (statements, Statement.layout))
+         val transferLayout =
+            case transfer of
+               SOME transfer => Transfer.layout transfer
+             | _ => empty
+      in
+         align [seq [str "dblock(", Fact.layout entryFact, str ") ",
+                     labelArgsLayout],
+                indent (align [statementsLayout, transferLayout], 2)]
+      end
+
 
    fun nodes (T {args, label, statements, transfer, ...}) =
       let
@@ -165,6 +213,41 @@ structure Graph = struct
    fun openR (blocks, right) = Many (NONE, blocks, SOME right)
    fun openLR (left, blocks, right) = Many (SOME left, blocks, SOME right)
 
+   fun layout graph =
+      let
+         open Layout
+      in
+         case graph of
+            Nil => str "graphNil"
+          | Unit dblock => seq [str "graphUnit ", DBlock.layout dblock]
+          | Many (left, blocks, right) =>
+               let
+                  val tag =
+                     case (left, right) of
+                        (NONE, NONE) => str "graphMany_CC"
+                      | (SOME _, NONE) => str "graphMany_OC"
+                      | (NONE, SOME _) => str "graphMany_CO"
+                      | (SOME _, SOME _) => str "graphMany_OO"
+                  val leftLayout =
+                     case left of
+                        SOME dblock => DBlock.layout dblock
+                      | _ => empty
+                  val rightLayout =
+                     case right of
+                        SOME dblock => DBlock.layout dblock
+                      | _ => empty
+                  val blocksLayout = List.map (blocks, DBlock.layout)
+               in
+                  align [tag,
+                         indent (align [leftLayout,
+                                        align blocksLayout,
+                                        rightLayout],
+                                 2)]
+               end
+      end
+
+   val toString = Layout.toString o layout
+
    (*fun entryLabel g =
       case g of
          Many (NONE, b :: _, _) => DBlock.label b
@@ -178,30 +261,40 @@ structure Graph = struct
               | _ => [])
        | _ => []*)
 
-   (* FIXME better error messages for failures *)
    (* failures can only happen if a Unit has been constructed incorrectly or
     * if splice is applied to incompatible arguments *)
    fun splice g1 g2 =
-      case (g1, g2) of
-         (_, Nil) => g1
-       | (Nil, _) => g2
-       | (Unit b1, Unit b2) =>
-            (case DBlock.merge b1 b2 of
-                [b] => Unit b
-              | _ => raise Fail "Graph.splice")
-       | (Unit b, Many (SOME left, body, right)) =>
-            (case DBlock.merge b left of
-                [left'] => Many (SOME left', body, right)
-              | _ => raise Fail "Graph.splice")
-       | (Many (left, body, SOME right), Unit b) =>
-            (case DBlock.merge right b of
-                [right'] => Many (left, body, SOME right')
-              | _ => raise Fail "Graph.splice")
-       | (Many (left, body1, SOME b1), Many (SOME b2, body2, right)) =>
-            Many (left, body1 @ (DBlock.merge b1 b2) @ body2, right)
-       | (Many (left, body1, NONE), Many (NONE, body2, right)) =>
-            Many (left, body1 @ body2, right)
-       | _ => raise Fail "Graph.splice"
+      let
+         fun fail msg =
+         let
+            val layout1 = layout g1
+            val layout2 = layout g2
+            open Layout
+         in
+            raise Fail (toString (align [str msg, layout1, layout2]))
+         end
+      in
+         case (g1, g2) of
+            (_, Nil) => g1
+          | (Nil, _) => g2
+          | (Unit b1, Unit b2) =>
+               (case DBlock.merge b1 b2 of
+                   [b] => Unit b
+                 | _ => fail "Unit/unit splice: result not unary")
+          | (Unit b, Many (SOME left, body, right)) =>
+               (case DBlock.merge b left of
+                   [left'] => Many (SOME left', body, right)
+                 | _ => fail "Unit/many splice: left edge not unary")
+          | (Many (left, body, SOME right), Unit b) =>
+               (case DBlock.merge right b of
+                   [right'] => Many (left, body, SOME right')
+                 | _ => fail "Many/unit splice: right edge not unary")
+          | (Many (left, body1, SOME b1), Many (SOME b2, body2, right)) =>
+               Many (left, body1 @ (DBlock.merge b1 b2) @ body2, right)
+          | (Many (left, body1, NONE), Many (NONE, body2, right)) =>
+               Many (left, body1 @ body2, right)
+          | _ => fail "Invalid splice shape"
+      end
 end
 
 fun rewriteNode (rwLb, rwSt, rwTr) n f =

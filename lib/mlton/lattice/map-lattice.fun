@@ -37,4 +37,14 @@ in
    else NONE
 end
 
+fun 'a layout'' (m: 'a t, layoutKey: Key.ord_key -> Layout.t,
+                layoutElt: 'a -> Layout.t): Layout.t =
+   let
+      open Layout
+      val pairs =
+         List.map (listItemsi m, fn (key, elt) =>
+                   seq [layoutKey key, str ": ", layoutElt elt])
+   in
+      mayAlign (separate (pairs, ", "))
+   end
 end

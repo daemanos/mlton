@@ -20,14 +20,29 @@ datatype 'f Poset = Top
                   | Elt of 'f
                   | Bot
 
-structure VarMapLattice = MapLattice (
+fun layoutPoset layoutF poset =
+   let
+      open Layout
+   in
+      case poset of
+         Top => str "Top"
+       | Bot => str "Bot"
+       | Elt f => seq [str "Elt[", layoutF f, str "]"]
+   end
+
+structure VarMapLattice =
 struct
-   type ord_key = Var.t
-   fun compare (u, v) =
-      if (Var.hash u) < (Var.hash v)
-      then LESS
-      else GREATER
-end)
+   structure Lattice = MapLattice (struct
+      type ord_key = Var.t
+      fun compare (u, v) =
+         if (Var.hash u) < (Var.hash v)
+         then LESS
+         else GREATER
+   end)
+
+   open Lattice
+   fun layout' (m, layoutElt) = layout'' (m, Var.layout, layoutElt)
+end
 
 structure FactBase =
 struct
@@ -78,6 +93,16 @@ struct
 
    fun foldi f b0 las = List.fold (las, b0, fn ((l, a), b) => f (l, a) b)
    fun fold f b0 las = List.fold (las, b0, fn ((_, a), b) => f a b)
+
+   fun layout' (las, layoutA) =
+      let
+         open Layout
+         val pairs =
+            List.map (las, fn (label, a) =>
+                      seq [Label.layout label, str " => ", layoutA a])
+      in
+         mayAlign (separate (pairs, ", "))
+      end
 end
 
 type prefix = {args: (Var.t * Type.t) vector,

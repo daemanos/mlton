@@ -57,4 +57,6 @@ signature MAP_LATTICE =
       (* added lattice operations *)
       val zip: 'a t * 'b t -> ('a option * 'b option) t
       val join: ('a * 'a -> 'a option) -> 'a t * 'a t -> 'a t option
+
+      val layout'' : 'a t * (Key.ord_key -> Layout.t) * ('a -> Layout.t) -> Layout.t
    end

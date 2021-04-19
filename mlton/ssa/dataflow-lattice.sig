@@ -10,4 +10,6 @@ signature DATAFLOW_LATTICE =
 
       val bot: t
       val join : t * t -> t option
+
+      val layout : t -> Layout.t
    end

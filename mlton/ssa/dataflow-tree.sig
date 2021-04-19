@@ -24,8 +24,13 @@ signature DATAFLOW_TREE =
                         | Elt of 'f
                         | Bot
 
+      val layoutPoset : ('f -> Layout.t) -> 'f Poset -> Layout.t
+
       (* predefined map lattice for variables *)
-      structure VarMapLattice: MAP_LATTICE
+      structure VarMapLattice: sig
+         include MAP_LATTICE
+         val layout' : 'a t * ('a -> Layout.t) -> Layout.t
+      end
 
       (* Fact definition *)
       structure FactBase : sig
@@ -46,6 +51,8 @@ signature DATAFLOW_TREE =
 
          val foldi : (Label.t * 'a -> 'b -> 'b) -> 'b -> 'a t -> 'b
          val fold : ('a -> 'b -> 'b) -> 'b -> 'a t -> 'b
+
+         val layout' : 'a t * ('a -> Layout.t) -> Layout.t
       end
 
       (* block prefix : arguments to the block, a label, and 0 or more
