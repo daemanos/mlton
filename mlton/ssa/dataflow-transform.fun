@@ -12,11 +12,6 @@ open P
 (* Optimization fuel *)
 val fuel: int ref = ref 0
 
-(* Rolling back speculative rewrites *)
-(* TODO real implementation *)
-fun checkpoint () = ()
-fun restart () = ()
-
 (* wrap facts and fact bases in a single datatype so they can be used in
  * recursive functions below *)
 structure AccumFact =
@@ -428,7 +423,6 @@ fun transform (program: Program.t): Program.t =
 
                fun loop fbase =
                   let
-                     val save = checkpoint ()
                      val init_tx =
                         TxFB {tfb_fbase = fbase,
                               tfb_cha = NoChange,
@@ -439,7 +433,7 @@ fun transform (program: Program.t): Program.t =
                   in
                      case #tfb_cha tx_fb of
                         NoChange => tx_fb
-                      | Change => (restart save; loop (#tfb_fbase tx_fb))
+                      | Change => loop (#tfb_fbase tx_fb)
                   end
 
                val tx_fb = loop fbase0
@@ -514,6 +508,8 @@ fun transform (program: Program.t): Program.t =
          List.map
          (functions, fn f =>
           let
+             (* TODO visit blocks in the right order (reverse postorder for
+              * forward) *)
              val {args, blocks, mayInline, name, raises, returns, start} =
                 Function.dest f
              val dblocks =
