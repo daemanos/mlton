@@ -625,7 +625,9 @@ fun transform (program: Program.t): Program.t =
              val (body, _) = analyzeAndRewrite rewrite [start] body af0
              val dblocks =
                 case body of
-                   Graph.Many (NONE, dblocks, NONE) => dblocks
+                   Graph.Nil => []
+                 | Graph.Unit dblock => [dblock]
+                 | Graph.Many (NONE, dblocks, NONE) => dblocks
                  | _ => raise Fail "dataflowTransform_openOnExit"
              val blocks = Vector.fromListMap (dblocks, DBlock.toBlock)
           in
