@@ -91,6 +91,7 @@ structure DBlock = struct
       val entryFact = make #entryFact
       val label = make #label
       val statements = make #statements
+      val transfer = make #transfer
    end
 
    fun layout (T {entryFact, args, label, statements, transfer}) =
@@ -208,7 +209,14 @@ structure Graph = struct
    val empty = Nil
    val emptyC = Many (NONE, [], NONE)
 
-   fun singleton (n, f) = Unit (DBlock.fromNode n f)
+   fun fromDBlock dblock =
+      case (DBlock.label dblock, DBlock.transfer dblock) of
+         (NONE, NONE) => Unit dblock
+       | (SOME _, NONE) => Many (NONE, [], SOME dblock)
+       | (NONE, SOME _) => Many (SOME dblock, [], NONE)
+       | (SOME _, SOME _) => Many (NONE, [dblock], NONE)
+
+   fun singleton (n, f) = fromDBlock (DBlock.fromNode n f)
    fun statements (sts, f) = Unit (DBlock.fromStatements sts f)
 
    fun closed blocks = Many (NONE, blocks, NONE)
@@ -266,7 +274,10 @@ structure Graph = struct
    fun simplify g =
       case g of
          Many (NONE, [], NONE) => Nil
-       | Many (NONE, [b], NONE) => Unit b
+       | Many (NONE, [b], NONE) =>
+            (case (DBlock.label b, DBlock.transfer b) of
+                (NONE, NONE) => Unit b
+              | _ => g)
        | _ => g
 
    (* failures can only happen if a Unit has been constructed incorrectly or
@@ -291,7 +302,7 @@ structure Graph = struct
           | (Unit b1, Unit b2) =>
                (case DBlock.merge b1 b2 of
                    [b] => Unit b
-                 | _ => fail "Unit/unit splice: result not unary")
+                 | _ => fail "Unit/unit splice: result not OO")
           | (Unit b, Many (SOME left, body, right)) =>
                (case DBlock.merge b left of
                    [left'] => Many (SOME left', body, right)
@@ -379,7 +390,7 @@ in
    doit r SOME NONE
 end
 
-fun transform (program as Program.T {datatypes, globals, functions, main}) =
+fun transform (Program.T {datatypes, globals, functions, main}) =
    let
       val (_, transferSt, _) = transfer
 
@@ -573,20 +584,11 @@ fun transform (program as Program.T {datatypes, globals, functions, main}) =
                (case FactBase.lookup fb label of
                    SOME fact => fact
                  | NONE => Fact.bot)
-
-            fun blockLabelEquals label block =
-               case DBlock.label block of
-                    SOME label' => Label.equals (label, label')
-                  | _ => false
          in
             (* TODO implement backward analysis *)
             fixpoint Fwd
             (fn (b, fb) => block (b, (getFact (valOf (DBlock.label b), fb))))
-            (List.map
-             (entries, fn label =>
-              case List.peek (blocks, blockLabelEquals label) of
-                 SOME block => block
-               | NONE => raise Fail "fixpoint_blockNotFound"))
+            blocks (* TODO sort into a more efficient order based on entries *)
             fbase0
          end
          and graph (g: Graph.t) (f: AccumFact.t): Graph.t * AccumFact.t =
