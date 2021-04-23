@@ -379,17 +379,21 @@ in
    doit r SOME NONE
 end
 
-fun transform (program: Program.t): Program.t =
+fun transform (program as Program.T {datatypes, globals, functions, main}) =
    let
-      val Program.T {datatypes, globals, functions, main} =
-         eliminateDeadBlocks program
-
       val (_, transferSt, _) = transfer
 
       (* Accumulate facts from globals *)
       val fact0 =
          Vector.fold
          (globals, Fact.bot, fn (global, fact) => transferSt global fact)
+
+      val _ =
+         Control.diagnostic
+         (fn () =>
+          let open Layout
+          in seq [str "\n\nGlobal Fact:\n", Fact.layout fact0]
+          end)
 
       (* Accumulate maps from labels to their arguments, associated blocks,
        * and predecessor labels *)
@@ -420,7 +424,22 @@ fun transform (program: Program.t): Program.t =
          in
             case rewLoop rewrite n f of
                SOME (g, rewrite') =>
-                  analyzeAndRewrite rewrite' (Node.entryLabels n) g (AccumFact.Cont f)
+                  let
+                     val _ =
+                        Control.diagnostic
+                        (fn () =>
+                         let
+                            open Layout
+                         in
+                            seq [str "\nRewriting ",
+                                 Node.layout n,
+                                 str " based on ",
+                                 Fact.layout f]
+                         end)
+                  in
+                     analyzeAndRewrite
+                     rewrite' (Node.entryLabels n) g (AccumFact.Cont f)
+                  end
              | NONE => (Graph.singleton (n, f), Node.continue (n, f))
          end
          and block (b: DBlock.t, f: AccumFact.t): (Graph.t * AccumFact.t) =
@@ -616,13 +635,28 @@ fun transform (program: Program.t): Program.t =
               * forward) *)
              val {args, blocks, mayInline, name, raises, returns, start} =
                 Function.dest f
-             val dblocks =
-                Vector.toListMap
-                (blocks, fn block => DBlock.fromBlock fact0 block)
+             val dblocks = Vector.toListMap (blocks, DBlock.fromBlock fact0)
+             val _ =
+                Control.diagnostic
+                (fn () =>
+                 Layout.str ("\nStarting function " ^
+                             (Func.toString name) ^ ":\n"))
              val body = Graph.closed dblocks
+             val _ =
+                Control.diagnostic
+                (fn () =>
+                 let open Layout
+                 in seq [str "Body (pre):\n", Graph.layout body]
+                 end)
              val labels = Vector.toListMap (blocks, Block.label)
              val af0 = AccumFact.Done (FactBase.uniform (labels, fact0))
              val (body, _) = analyzeAndRewrite rewrite [start] body af0
+             val _ =
+                Control.diagnostic
+                (fn () =>
+                 let open Layout
+                 in seq [str "Body (post):\n", Graph.layout body]
+                 end)
              val dblocks =
                 case body of
                    Graph.Nil => []
