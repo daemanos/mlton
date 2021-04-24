@@ -9,8 +9,8 @@ struct
 
 open P
 
-(* Optimization fuel *)
-val fuel: int ref = ref 0
+(* Optimization fuel (negative to disable) *)
+val fuel: int ref = ref ~1
 
 (* wrap facts and fact bases in a single datatype so they can be used in
  * recursive functions below *)
@@ -362,14 +362,21 @@ let
             in
                SOME (Graph.openL (suffix, blocks))
             end
+
+   val doit =
+      if !fuel < 0
+      then true
+      else
+         if !fuel > 0
+         then (fuel := !fuel - 1; true)
+         else false
 in
-   if !fuel > 0
+   if doit
    then
-      (fuel := !fuel - 1;
-       case n of
-          Node.Lb al => doitLb al
-        | Node.St st => doitSt st
-        | Node.Tr tr => doitTr tr)
+      case n of
+         Node.Lb al => doitLb al
+       | Node.St st => doitSt st
+       | Node.Tr tr => doitTr tr
    else
       NONE
 end
