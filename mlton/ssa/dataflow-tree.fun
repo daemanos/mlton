@@ -13,6 +13,9 @@ val {get = labelArgs: Label.t -> (Var.t * Type.t) vector,
      set = setLabelArgs, ...} =
    Property.getSet
    (Label.plist, Property.initRaise ("labelArgs", Label.layout))
+val {get = conType, set = setConType, ...} =
+   Property.getSetOnce
+   (Con.plist, Property.initRaise ("conType", Con.layout))
 
 (* helper constructor for lattice types *)
 (* TODO probably put somewhere more relevant *)

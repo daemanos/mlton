@@ -41,25 +41,46 @@ struct
             else SOME Top
        | _ => SOME Top
 
-   fun toExp (const, f) =
+   fun toStatements (const, var, ty) =
       case const of
-         Const c => Exp.Const c
-       | ConApp _ =>
+         Const c => [Statement.T {var = SOME var, ty = ty, exp = Exp.Const c}]
+       | ConApp {con, args} =>
             let
-               val candidates =
-                  Lattice.filter
-                  (fn elt =>
-                   case elt of
-                      Elt const' => equals (const', const)
-                    | _ => false) f
-            in
-               case Lattice.firsti candidates of
-                  SOME (var, _) => Exp.Var var
-                | _ => raise Fail "ConstValue.toExp"
-            end
+               fun introduceVar const =
+                  case const of
+                     Const c =>
+                        let
+                           val var = Var.newNoname ()
+                           val ty = Type.ofConst c
+                        in
+                           (var, toStatements (const, var, ty))
+                        end
+                   | ConApp {con, args} =>
+                        let
+                           val (vars, stss) =
+                              List.unzip (Vector.toListMap (args, introduceVar))
+                           val var = Var.newNoname ()
+                           val ty = conType con
+                           val exp =
+                              Exp.ConApp
+                              {con = con,
+                               args = Vector.fromList vars}
+                           val st =
+                              Statement.T
+                              {var = SOME var,
+                               ty = ty,
+                               exp = exp}
+                        in
+                           (var, List.snoc (List.concat stss, st))
+                        end
 
-   fun toStatement (const, f, var, ty) =
-      Statement.T {var = SOME var, ty = ty, exp = toExp (const, f)}
+               val (vars, stss) =
+                  List.unzip (Vector.toListMap (args, introduceVar))
+               val exp = Exp.ConApp {con = con, args = Vector.fromList vars}
+               val st = Statement.T {var = SOME var, ty = ty, exp = exp}
+            in
+               List.snoc (List.concat stss, st)
+            end
 
    fun layout const =
       let
@@ -137,7 +158,18 @@ local
          let open Transfer
          in
             case t of
-               Goto {dst, ...} => FactBase.singleton (dst, f)
+               Goto {dst, args} =>
+                  let
+                     val argVals =
+                        Vector.map (args, fn arg => Lattice.lookup (f, arg))
+                     val targetArgs = labelArgs dst
+                     val f =
+                        Vector.fold2
+                        (targetArgs, argVals, f, fn ((arg, _), argVal, f) =>
+                         Lattice.insert (f, arg, argVal))
+                  in
+                     FactBase.singleton (dst, f)
+                  end
              | Case {test, cases, default} =>
                   FactBase.fromCases
                   (cases, default, f,
@@ -172,7 +204,12 @@ local
             Statement.T {var = SOME var, ty, ...} =>
                (case Lattice.find (f, var) of
                    SOME (Elt c) =>
-                     replaceSt1 (ConstValue.toStatement (c, f, var, ty))
+                     let
+                        val sts =
+                           Vector.fromList
+                           (ConstValue.toStatements (c, var, ty))
+                     in SOME (Statements sts)
+                     end
                  | _ => NONE)
           | _ => NONE
 
@@ -194,9 +231,9 @@ local
                    let
                       val _ = cha := true
                       val arg' = (Var.new var, ty)
-                      val st = ConstValue.toStatement (c, f, var, ty)
+                      val sts' = ConstValue.toStatements (c, var, ty)
                    in
-                      (arg', st::sts)
+                      (arg', sts' @ sts)
                    end
                  | _ => ((var, ty), sts))
             val prefix =

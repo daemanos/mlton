@@ -17,6 +17,8 @@ signature DATAFLOW_TREE =
        * before any analysis is performed *)
       val labelArgs : Label.t -> (Var.t * Type.t) vector
       val setLabelArgs : Label.t * (Var.t * Type.t) vector -> unit
+      val conType: Con.t -> Type.t
+      val setConType: Con.t * Type.t -> unit
 
       (* helper constructor for lattice types *)
       (* TODO probably put somewhere more relevant *)

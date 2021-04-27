@@ -439,6 +439,14 @@ fun transform (Program.T {datatypes, globals, functions, main}) =
                 setLabelPreds (label, label' :: (labelPreds label)))))
           end)
 
+      (* Accumulate maps from cons to their tycons *)
+      val _ =
+         Vector.foreach
+         (datatypes, fn Datatype.T {tycon, cons} =>
+          let val ty = Type.datatypee tycon
+          in Vector.foreach (cons, fn {con, ...} => setConType (con, ty))
+          end)
+
       (* Main analysis + rewriting *)
       fun analyzeAndRewrite rewrite entries =
       let
