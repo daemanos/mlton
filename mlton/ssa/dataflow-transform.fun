@@ -51,6 +51,11 @@ structure Node = struct
        | St st => AccumFact.Cont ((#2 transfer) st f)
        | Tr tr => AccumFact.Done ((#3 transfer) tr f)
 
+   fun entryFact (n, f) =
+      case n of
+         Lb (_, label) => AccumFact.Done (FactBase.singleton (label, f))
+       | _ => AccumFact.Cont f
+
    fun entryLabels n =
       case n of
          Tr tr =>
@@ -438,7 +443,16 @@ fun transform (Program.T {datatypes, globals, functions, main}) =
       fun analyzeAndRewrite rewrite entries =
       let
          fun node (n: Node.t, af: AccumFact.t) : (Graph.t * AccumFact.t) =
-         let val f = AccumFact.valOf af
+         let
+            val f = AccumFact.valOf af
+            val _ =
+               Control.diagnostic
+               (fn () =>
+                let open Layout
+                in
+                   seq [str "Evaluating ", Node.layout n, str " based on ",
+                        Fact.layout f]
+                end)
          in
             case rewLoop rewrite n f of
                SOME (g, rewrite') =>
@@ -456,7 +470,7 @@ fun transform (Program.T {datatypes, globals, functions, main}) =
                          end)
                   in
                      analyzeAndRewrite
-                     rewrite' (Node.entryLabels n) g (AccumFact.Cont f)
+                     rewrite' (Node.entryLabels n) g (Node.entryFact (n, f))
                   end
              | NONE => (Graph.singleton (n, f), Node.continue (n, f))
          end
