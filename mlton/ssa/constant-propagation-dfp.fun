@@ -119,6 +119,15 @@ local
                               else Top
                            end
                       | _ => Top
+
+                  val _ =
+                     Control.diagnostic
+                     (fn () =>
+                      let open Layout
+                      in
+                         seq [str "Adding ", Var.layout var, str " |-> ",
+                              layoutPoset ConstValue.layout constOrTop]
+                      end)
                in
                   Lattice.insert (f, var, constOrTop)
                end
@@ -176,12 +185,14 @@ local
    let
       fun lb (args, label) f =
          let
+            val cha = ref false
             val (args, statements) =
                Vector.mapAndFold
                (args, [], fn ((var, ty), sts) =>
                 case Lattice.find (f, var) of
                    SOME (Elt c) =>
                    let
+                      val _ = cha := true
                       val arg' = (Var.new var, ty)
                       val st = ConstValue.toStatement (c, f, var, ty)
                    in
@@ -193,7 +204,9 @@ local
                 label = label,
                 statements = Vector.fromListRev statements}
          in
-            SOME {blocks = [], prefix = prefix}
+            if !cha
+            then SOME {blocks = [], prefix = prefix}
+            else NONE
          end
 
       (* TODO more simplification *)
