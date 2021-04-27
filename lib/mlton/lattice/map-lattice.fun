@@ -12,25 +12,21 @@ open Map
 
 type 'a t = 'a map
 
-fun 'a zip (m1: 'a t, m2: 'b t) : ('a option * 'b option) t
-   = mergeWith SOME (m1, m2)
-
 fun 'a join (f: 'a * 'a -> 'a option) (old: 'a t, new: 'a t) : 'a t option =
 let
    val changed = ref false
-   val zipped = zip (old, new)
 
    fun joinOne (oldValOpt, newValOpt) =
       case (oldValOpt, newValOpt) of
          (SOME oldVal, SOME newVal) =>
             (case f (oldVal, newVal) of
-                SOME val' => (changed := true; val')
-              | NONE => newVal)
-       | (SOME oldVal, NONE) => oldVal
-       | (NONE, SOME newVal) => (changed := true; newVal)
+                SOME val' => (changed := true; SOME val')
+              | NONE => SOME oldVal)
+       | (SOME oldVal, NONE) => SOME oldVal
+       | (NONE, SOME newVal) => (changed := true; SOME newVal)
        | _ => raise Fail "MapLattice.join" (* can't happen *)
 
-   val new' = map joinOne zipped
+   val new' = mergeWith joinOne (old, new)
 in
    if !changed
    then SOME new'

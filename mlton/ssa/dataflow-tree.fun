@@ -35,9 +35,17 @@ struct
    structure Lattice = MapLattice (struct
       type ord_key = Var.t
       fun compare (u, v) =
-         if (Var.hash u) < (Var.hash v)
-         then LESS
-         else GREATER
+         let
+            val hu = Var.hash u
+            val hv = Var.hash v
+         in
+            if hu = hv
+            then EQUAL
+            else
+               if hu < hv
+               then LESS
+               else GREATER
+         end
    end)
 
    open Lattice
