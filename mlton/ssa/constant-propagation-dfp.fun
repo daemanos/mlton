@@ -31,15 +31,7 @@ struct
           Con.equals (con1, con2) andalso Vector.forall2 (args1, args2, equals)
        | _ => false
 
-   fun join (old, new) =
-      case (old, new) of
-         (Bot, _) => SOME new
-       | (_, Bot) => NONE
-       | (Elt oldConst, Elt newConst) =>
-            if equals (oldConst, newConst)
-            then NONE
-            else SOME Top
-       | _ => SOME Top
+   fun join (old, new) = if equals (old, new) then NONE else SOME Top
 
    fun toStatements (const, var, ty) =
       case const of
@@ -103,7 +95,7 @@ structure Fact = struct
    type t = fact Lattice.t
 
    val bot = Lattice.empty
-   val join = Lattice.join ConstValue.join
+   val join = Lattice.join (joinPoset ConstValue.join)
 
    fun findAll (f, vars) =
       Vector.keepAllMap

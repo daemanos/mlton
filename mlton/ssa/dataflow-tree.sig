@@ -28,6 +28,8 @@ signature DATAFLOW_TREE =
 
       val layoutPoset : ('f -> Layout.t) -> 'f Poset -> Layout.t
 
+      val joinPoset : ('f * 'f -> 'f Poset option) -> ('f Poset * 'f Poset -> 'f Poset option)
+
       (* predefined map lattice for variables *)
       structure VarMapLattice: sig
          include MAP_LATTICE

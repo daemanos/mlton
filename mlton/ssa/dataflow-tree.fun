@@ -33,6 +33,15 @@ fun layoutPoset layoutF poset =
        | Elt f => seq [str "Elt[", layoutF f, str "]"]
    end
 
+fun joinPoset joinElt =
+   fn (old, new) =>
+      case (old, new) of
+         (_, Bot) => NONE
+       | (Bot, _) => SOME new
+       | (Top, _) => NONE
+       | (_, Top) => SOME Top
+       | (Elt old, Elt new) => joinElt (old, new)
+
 structure VarMapLattice =
 struct
    structure Lattice = MapLattice (struct
@@ -86,8 +95,6 @@ struct
              default_la)
    end
 
-   fun insert las la = la::las
-
    fun lookup las l =
       case las of
          ((l',a)::rest) =>
@@ -96,6 +103,11 @@ struct
        | [] => NONE
 
    fun isMember las l = isSome (lookup las l)
+
+   fun insert las (l, a) =
+      if isMember las l
+      then las
+      else (l, a)::las
 
    fun deleteList ls las =
       List.keepAll

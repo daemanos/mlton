@@ -502,15 +502,23 @@ fun transform (Program.T {datatypes, globals, functions, main}) =
             let
                val fact = getOpt (FactBase.lookup fbase label, Fact.bot)
                val fact'' = Fact.join (fact, fact')
+               val containsLabel = LabelSet.contains (labels, label)
                val _ =
                   Control.diagnostic
                   (fn () =>
                    let open Layout
                    in
-                      seq [str "Updating fact for ", Label.layout label]
+                      seq [str "Updating fact for ", Label.layout label,
+                           str " (old fact = ", Fact.layout fact,
+                           str ", new fact = ", Fact.layout fact',
+                           str ") in ",
+                           LabelSet.layout labels,
+                           str "\n\tJoin: ", Option.layout Fact.layout fact'',
+                           str "\n\tContainsLabel: ",
+                           if containsLabel then str "yes" else str "no"]
                    end)
             in
-               case (fact'', LabelSet.contains (labels, label)) of
+               case (fact'', containsLabel) of
                   (NONE, true) => (cha, fbase)
                 | (NONE, _) => (label::cha, fbase)
                 | (SOME fact'', _) =>
@@ -563,8 +571,10 @@ fun transform (Program.T {datatypes, globals, functions, main}) =
                      (fn () =>
                       let open Layout
                       in
-                         seq [str "Starting fixpoint loop with ",
-                              List.layout Label.layout todo]
+                         seq [str "Starting fixpoint loop with:",
+                              str "\n\tTodo: ", List.layout Label.layout todo,
+                              str "\n\tFactBase: ",
+                              FactBase.layout' (fbase, Fact.layout)]
                       end)
                in
                   case todo of
