@@ -41,6 +41,6 @@ fun 'a layout'' (m: 'a t, layoutKey: Key.ord_key -> Layout.t,
          List.map (listItemsi m, fn (key, elt) =>
                    seq [layoutKey key, str ": ", layoutElt elt])
    in
-      mayAlign (separate (pairs, ", "))
+      seq (separate (pairs, ", "))
    end
 end

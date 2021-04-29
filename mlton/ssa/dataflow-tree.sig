@@ -51,6 +51,7 @@ signature DATAFLOW_TREE =
          val isMember : 'a t -> Label.t -> bool
          val deleteList : Label.t list -> 'a t -> 'a t
 
+         val map : ('a -> 'b) -> 'a t -> 'b t
          val foldi : (Label.t * 'a -> 'b -> 'b) -> 'b -> 'a t -> 'b
          val fold : ('a -> 'b -> 'b) -> 'b -> 'a t -> 'b
 

@@ -102,6 +102,7 @@ struct
       (las,
        fn (l', _) => List.exists (ls, fn l => Label.equals (l', l)))
 
+   fun map f las = List.map (las, fn (l, a) => (l, f a))
    fun foldi f b0 las = List.fold (las, b0, fn ((l, a), b) => f (l, a) b)
    fun fold f b0 las = List.fold (las, b0, fn ((_, a), b) => f a b)
 

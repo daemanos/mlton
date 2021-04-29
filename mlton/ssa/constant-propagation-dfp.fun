@@ -34,7 +34,7 @@ struct
    fun join (old, new) =
       case (old, new) of
          (Bot, _) => SOME new
-       | (_, Bot) => SOME old
+       | (_, Bot) => NONE
        | (Elt oldConst, Elt newConst) =>
             if equals (oldConst, newConst)
             then NONE
