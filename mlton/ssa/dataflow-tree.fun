@@ -67,6 +67,7 @@ end
 structure FactBase =
 struct
    type 'a t = (Label.t * 'a) list
+   exception NotFound
 
    val empty = []
    fun singleton la = [la]
@@ -104,10 +105,20 @@ struct
 
    fun isMember las l = isSome (lookup las l)
 
-   fun insert las (l, a) =
-      if isMember las l
-      then las
-      else (l, a)::las
+   fun updateOrInsert las (l, mk) =
+      case las of
+         [] => [(l, mk NONE)]
+       | ((l', a)::rest) =>
+            if Label.equals (l, l')
+            then (l', mk (SOME a))::rest
+            else (l', a)::(updateOrInsert rest (l, mk))
+
+   fun update las (l, mk) =
+      updateOrInsert las (l, fn aOpt =>
+                          case aOpt of
+                             SOME a => mk a
+                           | NONE => raise NotFound)
+   fun insert las (l, a) = updateOrInsert las (l, fn _ => a)
 
    fun deleteList ls las =
       List.keepAll

@@ -502,27 +502,25 @@ fun transform (Program.T {datatypes, globals, functions, main}) =
             let
                val fact = getOpt (FactBase.lookup fbase label, Fact.bot)
                val fact'' = Fact.join (fact, fact')
-               val containsLabel = LabelSet.contains (labels, label)
                val _ =
                   Control.diagnostic
                   (fn () =>
                    let open Layout
                    in
-                      seq [str "Updating fact for ", Label.layout label,
-                           str " (old fact = ", Fact.layout fact,
-                           str ", new fact = ", Fact.layout fact',
-                           str ") in ",
-                           LabelSet.layout labels,
-                           str "\n\tJoin: ", Option.layout Fact.layout fact'',
-                           str "\n\tContainsLabel: ",
-                           if containsLabel then str "yes" else str "no"]
+                      seq [str "Updating fact for ", Label.layout label]
                    end)
             in
-               case (fact'', containsLabel) of
+               case (fact'', LabelSet.contains (labels, label)) of
                   (NONE, true) => (cha, fbase)
                 | (NONE, _) => (label::cha, fbase)
                 | (SOME fact'', _) =>
-                     (label::cha, FactBase.insert fbase (label, fact''))
+                     (label::cha,
+                      FactBase.updateOrInsert fbase
+                      (label, fn oldFact =>
+                       case oldFact of
+                          SOME oldFact =>
+                             getOpt (Fact.join (oldFact, fact''), oldFact)
+                        | NONE => fact''))
             end
 
             (* TODO put elsewhere *)
@@ -571,10 +569,8 @@ fun transform (Program.T {datatypes, globals, functions, main}) =
                      (fn () =>
                       let open Layout
                       in
-                         seq [str "Starting fixpoint loop with:",
-                              str "\n\tTodo: ", List.layout Label.layout todo,
-                              str "\n\tFactBase: ",
-                              FactBase.layout' (fbase, Fact.layout)]
+                         seq [str "Starting fixpoint loop (todo = ",
+                              List.layout Label.layout todo]
                       end)
                in
                   case todo of
@@ -594,9 +590,7 @@ fun transform (Program.T {datatypes, globals, functions, main}) =
                                      (fn () =>
                                       let open Layout
                                       in
-                                         seq [str "Block finished with ",
-                                              FactBase.layout'
-                                              (out_facts, Fact.layout)]
+                                         seq [str "Block finished"]
                                       end)
                                   val (changed, fbase') =
                                      FactBase.foldi
@@ -634,15 +628,7 @@ fun transform (Program.T {datatypes, globals, functions, main}) =
 
                val _ =
                   Control.diagnostic
-                  (fn () =>
-                   let open Layout
-                   in
-                      seq [str "Fixpoint finished with:",
-                           str "\n\tNew blocks: ",
-                           List.layout DBlock.layout newBlocks,
-                           str "\n\tFactBase: ",
-                           FactBase.layout' (fbase, Fact.layout)]
-                   end)
+                  (fn () => Layout.str "Fixpoint finished")
             in
                (Graph.closed newBlocks, AccumFact.Done fbase)
             end

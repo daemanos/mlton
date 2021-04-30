@@ -39,6 +39,7 @@ signature DATAFLOW_TREE =
       (* Fact definition *)
       structure FactBase : sig
          type 'a t
+         exception NotFound
 
          val empty : 'a t
          val singleton: Label.t * 'a -> 'a t
@@ -48,6 +49,8 @@ signature DATAFLOW_TREE =
          val fromCases: (Con.t, Label.t) Cases.t * Label.t option * 'a *
                         (Con.t * Label.t -> 'a option) -> 'a t
 
+         val updateOrInsert : 'a t -> (Label.t * ('a option -> 'a)) -> 'a t
+         val update : 'a t -> (Label.t * ('a -> 'a)) -> 'a t
          val insert : 'a t -> (Label.t * 'a) -> 'a t
          val lookup : 'a t -> Label.t -> 'a option
          val isMember : 'a t -> Label.t -> bool

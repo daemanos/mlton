@@ -153,7 +153,10 @@ local
                Goto {dst, args} =>
                   let
                      val argVals =
-                        Vector.map (args, fn arg => Lattice.lookup (f, arg))
+                        Vector.map
+                        (args, fn arg =>
+                         Lattice.lookup (f, arg)
+                         handle NotFound => raise Fail (Var.toString arg))
                      val targetArgs = labelArgs dst
                      val f =
                         Vector.fold2
@@ -212,6 +215,7 @@ local
 
    val simplify : Fact.t rewrite =
    let
+      (* TODO should this be in constProp? *)
       fun lb (args, label) f =
          let
             val cha = ref false
