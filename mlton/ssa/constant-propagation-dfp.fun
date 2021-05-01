@@ -97,6 +97,8 @@ structure Fact = struct
    val bot = Lattice.empty
    val join = Lattice.join (joinPoset ConstValue.join)
 
+   fun lookup (f, var) = Lattice.lookup (f, var) handle _ => Bot
+
    fun findAll (f, vars) =
       Vector.keepAllMap
       (vars, fn var =>
@@ -104,7 +106,7 @@ structure Fact = struct
           SOME (Elt c) => SOME c
         | _ => NONE)
 
-   fun layout f = Lattice.layout' (f, layoutPoset ConstValue.layout)
+   val layout = Lattice.layout (layoutPoset ConstValue.layout)
 end
 
 (* For now mostly based on example in Hoopl paper *)
@@ -113,7 +115,10 @@ local
    (* Analysis: variable equals a literal constant *)
    val varHasLit : Fact.t transfer =
    let
-      fun lb _ f = f
+      fun lb (args, _) f =
+         Vector.fold
+         (args, f, fn ((arg, _), f) =>
+          getOpt (Fact.join (f, Lattice.singleton (arg, Bot)), f))
 
       fun st s f =
          case Statement.var s of
@@ -155,8 +160,7 @@ local
                      val argVals =
                         Vector.map
                         (args, fn arg =>
-                         Lattice.lookup (f, arg)
-                         handle NotFound => raise Fail (Var.toString arg))
+                         Fact.lookup (f, arg))
                      val targetArgs = labelArgs dst
                      val f =
                         Vector.fold2
@@ -216,7 +220,8 @@ local
    val simplify : Fact.t rewrite =
    let
       (* TODO should this be in constProp? *)
-      fun lb (args, label) f =
+      (* FIXME not needed? *)
+      (*fun lb (args, label) f =
          let
             val cha = ref false
             val (args, statements) =
@@ -240,7 +245,9 @@ local
             if !cha
             then SOME {blocks = [], prefix = prefix}
             else NONE
-         end
+         end*)
+
+      val lb = norwLb
 
       (* TODO more simplification *)
       val st = norwSt

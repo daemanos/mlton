@@ -21,6 +21,7 @@ ann "forceUsed" in
       signature INT_INF
       signature LIST
       signature ORD_KEY
+      signature ORD_MAP
       signature MAP_LATTICE
       (* signature MONO_CONTAINER *)
       signature MONO_ENV
@@ -148,6 +149,7 @@ ann "forceUsed" in
       functor PolyEnv
       functor PowerSetLattice_ListSet
       functor PowerSetLattice_UniqueSet
+      functor RedBlackMapFn
       functor Ring
       functor RingWithIdentity
       functor ThreePointLattice

@@ -46,22 +46,11 @@ structure VarMapLattice =
 struct
    structure Lattice = MapLattice (struct
       type ord_key = Var.t
-      fun compare (u, v) =
-         let
-            val hu = Var.hash u
-            val hv = Var.hash v
-         in
-            if hu = hv
-            then EQUAL
-            else
-               if hu < hv
-               then LESS
-               else GREATER
-         end
+      fun compare (u, v) = Word.compare (Var.hash u, Var.hash v)
    end)
 
    open Lattice
-   fun layout' (m, layoutElt) = layout'' (m, Var.layout, layoutElt)
+   fun layout layoutElt m = layout'' (m, Var.layout, layoutElt)
 end
 
 structure FactBase =
@@ -129,14 +118,13 @@ struct
    fun foldi f b0 las = List.fold (las, b0, fn ((l, a), b) => f (l, a) b)
    fun fold f b0 las = List.fold (las, b0, fn ((_, a), b) => f a b)
 
-   fun layout' (las, layoutA) =
-      let
-         open Layout
-         val pairs =
-            List.map (las, fn (label, a) =>
-                      seq [Label.layout label, str " => ", layoutA a])
+   fun layout layoutA las =
+      let open Layout
       in
-         mayAlign (separate (pairs, ", "))
+         record
+         (List.map
+          (las, fn (label, a) =>
+           (Label.toString label, layoutA a)))
       end
 end
 
