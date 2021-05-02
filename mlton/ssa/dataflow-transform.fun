@@ -212,19 +212,16 @@ struct
    end)
    open Map
 
-   val union = unionWith #2
+   val union = unionWith #1
 
-   fun fromList kvs =
-      List.fold (kvs, empty, fn ((k, v), m) => insert (m, k, v))
    fun fromListMap (xs, mk) =
       List.fold (xs, empty, fn (x, m) => insert' (mk x, m))
-   fun fromListWith (kvs, comb) =
-      List.fold (kvs, empty, fn ((k, v), m) => insertWith comb (m, k, v))
    fun fromListMapWith (xs, mk, comb) =
       List.fold (xs, empty, fn (x, m) =>
                  let val (k, v) = mk x
                  in insertWith comb (m, k, v)
                  end)
+   fun fromListWith (kvs, comb) = fromListMapWith (kvs, fn kv => kv, comb)
 
    fun fromDBlocks blocks =
       fromListMap
@@ -327,6 +324,12 @@ structure Graph = struct
          (*val g1 = simplify g1
          val g2 = simplify g2*)
 
+         fun bodyUnion (body1, body2) =
+            LabelMap.unionWithi
+            (fn (lbl, _, _) =>
+             raise Fail ("Duplicate blocks with label " ^ (Label.toString lbl)))
+            (body1, body2)
+
          fun fail msg =
          let
             val layout1 = layout g1
@@ -359,12 +362,12 @@ structure Graph = struct
                         [b] => LabelMap.insert
                                (body1, valOf (DBlock.label b), b)
                       | _ => fail "Many/many splice: incompatible edges"
-                  val body' = LabelMap.union (body1', body2)
+                  val body' = bodyUnion (body1', body2)
                in
                   Many (left, body', right)
                end
           | (Many (left, body1, NONE), Many (NONE, body2, right)) =>
-               Many (left, LabelMap.union (body1, body2), right)
+               Many (left, bodyUnion (body1, body2), right)
           | _ => fail "Invalid splice shape"
       end
 end
@@ -641,10 +644,7 @@ fun transform (Program.T {datatypes, globals, functions, main}) =
                                       let open Layout
                                       in
                                          seq [str "Changed: ",
-                                              List.layout Label.layout changed,
-                                              str "\nNew fact base: ",
-                                              FactBase.layout Fact.layout
-                                              fbase']
+                                              List.layout Label.layout changed]
                                       end)
 
                                   val changedDeps =
@@ -667,7 +667,7 @@ fun transform (Program.T {datatypes, globals, functions, main}) =
                                   val newBlocks' =
                                      case rg of
                                         Graph.Many (_, blocks, _) =>
-                                           LabelMap.union (newBlocks, blockmap)
+                                           LabelMap.union (blocks, newBlocks)
                                       | _ => raise Fail "analyzeAndRewrite_fixpoint [res]"
                                in
                                   loop fbase' (todo@toAnalyze) newBlocks'
@@ -719,24 +719,27 @@ fun transform (Program.T {datatypes, globals, functions, main}) =
                            SOME b =>
                               (case block (b, f) of
                                   (g, AccumFact.Done fb) =>
-                                    (*(case blocks of
-                                        [] => (g, AccumFact.Done fb)
-                                      | _ =>*)
-                                           let
-                                              val (g', f') =
-                                                 body
-                                                 (DBlock.successors b)
-                                                 blocks fb
-                                           in
-                                              (Graph.splice g g', f')
-                                           end
+                                    if LabelMap.isEmpty blocks
+                                    then (g, AccumFact.Done fb)
+                                    else
+                                       let
+                                          val (g', f') =
+                                             body
+                                             (DBlock.successors b)
+                                             blocks fb
+                                       in
+                                          (Graph.splice g g', f')
+                                       end
                                   (* can only happen if the left edge doesn't have a
                                    * transfer *)
                                 | _ => raise Fail "analyzeAndRewrite_graph")
                          | NONE =>
-                              (case f of
-                                  AccumFact.Done fb => body entries blocks fb
-                                | _ => raise Fail "analyzeAndRewrite_graph")
+                              if LabelMap.isEmpty blocks
+                              then (Graph.empty, f)
+                              else
+                                 case f of
+                                    AccumFact.Done fb => body entries blocks fb
+                                  | _ => raise Fail "analyzeAndRewrite_graph"
 
                      (* join all facts with bot to accumulate any
                       * debug information from the join function *)
