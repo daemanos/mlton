@@ -98,6 +98,24 @@ structure Fact = struct
    val join = Lattice.join (joinPoset ConstValue.join)
 
    fun lookup (f, var) = Lattice.lookup (f, var) handle _ => Bot
+   fun insert (f, var, const) =
+      let
+         val _ =
+            Control.diagnostic
+            (fn () =>
+             let open Layout
+             in
+                seq [str "Adding ", Var.layout var, str " |-> ",
+                     layoutPoset ConstValue.layout const]
+             end)
+      in
+         Lattice.insert (f, var, const)
+      end
+
+      (*fun joinOrInsert (f, var, const) =
+         case joinPoset ConstValue.join (lookup (f, var), const) of
+            NONE => f
+          | SOME const' => insert (f, var, const')*)
 
    fun findAll (f, vars) =
       Vector.keepAllMap
@@ -137,17 +155,8 @@ local
                               else Top
                            end
                       | _ => Top
-
-                  val _ =
-                     Control.diagnostic
-                     (fn () =>
-                      let open Layout
-                      in
-                         seq [str "Adding ", Var.layout var, str " |-> ",
-                              layoutPoset ConstValue.layout constOrTop]
-                      end)
                in
-                  Lattice.insert (f, var, constOrTop)
+                  Fact.insert (f, var, constOrTop)
                end
           | NONE => f
 
@@ -159,13 +168,12 @@ local
                   let
                      val argVals =
                         Vector.map
-                        (args, fn arg =>
-                         Fact.lookup (f, arg))
+                        (args, fn arg => Fact.lookup (f, arg))
                      val targetArgs = labelArgs dst
                      val f =
                         Vector.fold2
                         (targetArgs, argVals, f, fn ((arg, _), argVal, f) =>
-                         Lattice.insert (f, arg, argVal))
+                         Fact.insert (f, arg, argVal))
                   in
                      FactBase.singleton (dst, f)
                   end
@@ -180,7 +188,7 @@ local
                          if (Vector.size args) = (Vector.size args')
                          then
                             SOME
-                            (Lattice.insert
+                            (Fact.insert
                              (f, test,
                               Elt (ConstValue.ConApp
                                    {con = con,
@@ -188,6 +196,17 @@ local
                          else
                             NONE
                       end)
+             | Call {return, ...} =>
+                  (* Note: this is a conservative approximation since there is
+                   * no way to know whether this is an intraprocedural call
+                   * or not; would need a way to expose the current Func.t to
+                   * the dataflow problem *)
+                  Return.foldLabel
+                  (return, FactBase.empty, fn (label, fbase) =>
+                   FactBase.insert fbase
+                   (label,
+                    Vector.fold (labelArgs label, f, fn ((arg, _), f) =>
+                                 Fact.insert (f, arg, Top))))
              | _ => FactBase.empty
          end
    in
@@ -200,10 +219,18 @@ local
 
       fun st s f =
          case s of
-            Statement.T {var = SOME var, ty, ...} =>
-               (case Lattice.find (f, var) of
+            Statement.T {var = SOME var, ty, exp = Exp.Var var'} =>
+               (case Lattice.find (f, var') of
                    SOME (Elt c) =>
                      let
+                        val _ =
+                           Control.diagnostic
+                           (fn () =>
+                            let open Layout
+                            in
+                               seq [str "Found ", Var.layout var', str " |-> ",
+                                    ConstValue.layout c]
+                            end)
                         val sts =
                            Vector.fromList
                            (ConstValue.toStatements (c, var, ty))
@@ -219,34 +246,6 @@ local
 
    val simplify : Fact.t rewrite =
    let
-      (* TODO should this be in constProp? *)
-      (* FIXME not needed? *)
-      (*fun lb (args, label) f =
-         let
-            val cha = ref false
-            val (args, statements) =
-               Vector.mapAndFold
-               (args, [], fn ((var, ty), sts) =>
-                case Lattice.find (f, var) of
-                   SOME (Elt c) =>
-                   let
-                      val _ = cha := true
-                      val arg' = (Var.new var, ty)
-                      val sts' = ConstValue.toStatements (c, var, ty)
-                   in
-                      (arg', sts' @ sts)
-                   end
-                 | _ => ((var, ty), sts))
-            val prefix =
-               {args = args,
-                label = label,
-                statements = Vector.fromListRev statements}
-         in
-            if !cha
-            then SOME {blocks = [], prefix = prefix}
-            else NONE
-         end*)
-
       val lb = norwLb
 
       (* TODO more simplification *)
