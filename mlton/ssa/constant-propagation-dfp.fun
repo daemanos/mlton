@@ -207,6 +207,7 @@ local
                    (label,
                     Vector.fold (labelArgs label, f, fn ((arg, _), f) =>
                                  Fact.insert (f, arg, Top))))
+             | Runtime {return, ...} => FactBase.singleton (return, f)
              | _ => FactBase.empty
          end
    in
