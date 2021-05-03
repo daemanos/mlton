@@ -55,76 +55,68 @@ end
 
 structure FactBase =
 struct
-   type 'a t = (Label.t * 'a) list
+   structure M = RedBlackMapFn (struct
+      type ord_key = Label.t
+      fun compare (l, l') = Word.compare (Label.hash l, Label.hash l')
+   end)
+
+   type 'a t = 'a M.map
    exception NotFound
 
-   val empty = []
-   fun singleton la = [la]
-   fun fromList las = las
-   fun uniform (ls, a) = List.map (ls, fn l => (l, a))
+   val empty = M.empty
+   val singleton = M.singleton
+   val map = M.map
+   val foldi = M.foldli
+   val fold = M.foldl
+   val insert = M.insert
+   val insertWith = M.insertWith
+
+   fun uniform (ls, a) =
+      List.fold (ls, empty, fn (l, fbase) => insert (fbase, l, a))
+
+   fun insertWithJoin join =
+      insertWith (fn (old, new) => getOpt (join (old, new), old))
 
    fun fromCases (cases, default, fact, do_con) =
    let
       val default_la =
          case default of
-            SOME label => [(label, fact)]
-          | _ => []
+            SOME label => singleton (label, fact)
+          | _ => empty
    in
       case cases of
          Cases.Con conLabels =>
-            Vector.foldr
+            Vector.fold
             (conLabels,
              default_la,
              fn ((con, label), acc) =>
                 case do_con (con, label) of
-                   SOME fact' => (label, fact') :: acc
-                 | _ => (label, fact) :: acc)
+                   SOME fact' => insert (acc, label, fact')
+                 | _ => insert (acc, label, fact))
        | Cases.Word (_, wordLabels) =>
-            List.append
-            (Vector.toListMap (wordLabels, fn (_, label) => (label, fact)),
-             default_la)
+            Vector.fold
+            (wordLabels,
+             default_la,
+             fn ((_, label), acc) => insert (acc, label, fact))
    end
 
-   fun lookup las l =
-      case las of
-         ((l',a)::rest) =>
-            if Label.equals (l,l') then SOME a
-            else lookup rest l
-       | [] => NONE
+   (* TODO should probably make this line up more with M *)
 
-   fun isMember las l = isSome (lookup las l)
-
-   fun updateOrInsert las (l, mk) =
-      case las of
-         [] => [(l, mk NONE)]
-       | ((l', a)::rest) =>
-            if Label.equals (l, l')
-            then (l', mk (SOME a))::rest
-            else (l', a)::(updateOrInsert rest (l, mk))
-
-   fun update las (l, mk) =
-      updateOrInsert las (l, fn aOpt =>
-                          case aOpt of
-                             SOME a => mk a
-                           | NONE => raise NotFound)
-   fun insert las (l, a) = updateOrInsert las (l, fn _ => a)
+   fun lookup (las, l) = SOME (M.lookup (las, l)) handle _ => NONE
+   val isMember = M.inDomain
 
    fun deleteList ls las =
-      List.keepAll
-      (las,
-       fn (l', _) => List.exists (ls, fn l => Label.equals (l', l)))
-
-   fun map f las = List.map (las, fn (l, a) => (l, f a))
-   fun foldi f b0 las = List.fold (las, b0, fn ((l, a), b) => f (l, a) b)
-   fun fold f b0 las = List.fold (las, b0, fn ((_, a), b) => f a b)
+      List.fold
+      (ls, las, fn (label, fbase) => #1 (M.remove (fbase, label)))
 
    fun layout layoutA las =
       let open Layout
       in
          record
-         (List.map
-          (las, fn (label, a) =>
-           (Label.toString label, layoutA a)))
+         (foldi
+          (fn (label, a, layouts) =>
+           (Label.toString label, layoutA a) :: layouts)
+          [] las)
       end
 end
 

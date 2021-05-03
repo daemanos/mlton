@@ -1,14 +1,8 @@
-(* Copyright (C) 2017,2019-2020 Matthew Fluet.
- * Copyright (C) 1999-2008 Henry Cejtin, Matthew Fluet, Suresh
- *    Jagannathan, and Stephen Weeks.
- * Copyright (C) 1997-2000 NEC Research Institute.
+(* Copyright (C) 2021 Daman Morris.
  *
  * MLton is released under a HPND-style license.
  * See the file MLton-LICENSE for details.
  *)
-
-(* NOTE: copying copyright holders since I plan to base this on the original
- * implementation *)
 
 functor ConstantPropagationDFP(S: SSA_TRANSFORM_STRUCTS): DATAFLOW_PROBLEM =
 struct
@@ -32,6 +26,11 @@ struct
        | _ => false
 
    fun join (old, new) = if equals (old, new) then NONE else SOME Top
+
+   fun typeOf const =
+      case const of
+         Const c => Type.ofConst c
+       | ConApp {con, ...} => conType con
 
    fun toStatements (const, var, ty) =
       case const of
@@ -127,8 +126,6 @@ structure Fact = struct
    val layout = Lattice.layout (layoutPoset ConstValue.layout)
 end
 
-(* For now mostly based on example in Hoopl paper *)
-(* TODO maybe add additional MLton-specific details as necessary *)
 local
    (* Analysis: variable equals a literal constant *)
    val varHasLit : Fact.t transfer =
@@ -203,8 +200,8 @@ local
                    * the dataflow problem *)
                   Return.foldLabel
                   (return, FactBase.empty, fn (label, fbase) =>
-                   FactBase.insert fbase
-                   (label,
+                   FactBase.insert
+                   (fbase, label,
                     Vector.fold (labelArgs label, f, fn ((arg, _), f) =>
                                  Fact.insert (f, arg, Top))))
              | Runtime {return, ...} => FactBase.singleton (return, f)
@@ -256,13 +253,12 @@ local
          case t of
             Transfer.Case {test, cases, default} =>
                (case Lattice.find (f, test) of
-                   SOME (Elt (ConstValue.ConApp {con, ...})) =>
+                   SOME (Elt (ConstValue.ConApp {con, args})) =>
                      let
                         val cases =
                            case cases of
                               Cases.Con cases => cases
                             | _ => raise Fail "constantPropagationDFP_simplify"
-
                         val dst =
                            case Vector.peek
                                 (cases, fn (con', _) =>
@@ -272,10 +268,29 @@ local
                      in
                         case dst of
                            SOME dst =>
-                              replaceTr
-                              (Transfer.Goto
-                               {dst = dst,
-                                args = Vector.new0 ()})
+                              let
+                                 val (vars, stss) =
+                                    Vector.foldr
+                                    (args, ([], []), fn (arg, (vars, stss)) =>
+                                     let
+                                        val var = Var.newNoname ()
+                                        val ty = ConstValue.typeOf arg
+                                        val sts =
+                                           ConstValue.toStatements
+                                           (arg, var, ty)
+                                     in
+                                        (var::vars, sts::stss)
+                                     end)
+                                 val sts = Vector.fromList (List.concat stss)
+                                 val goto =
+                                    Transfer.Goto
+                                    {dst = dst,
+                                     args = Vector.fromList vars}
+                              in
+                                 SOME
+                                 {suffix = {statements = sts, transfer = goto},
+                                  blocks = []}
+                              end
                          | _ => NONE
                      end
                  | _ => NONE)

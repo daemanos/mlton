@@ -541,7 +541,7 @@ fun transform (Program.T {datatypes, globals, functions, main}) =
                 | AccumFact.Done fb =>
                      (case DBlock.label b of
                          SOME label =>
-                            (case FactBase.lookup fb label of
+                            (case FactBase.lookup (fb, label) of
                                 SOME f => f
                               | NONE => Fact.bot)
                        | NONE => Fact.bot))),
@@ -552,9 +552,9 @@ fun transform (Program.T {datatypes, globals, functions, main}) =
          and body (entries: Label.t list) blockmap (fbase0: Fact.t FactBase.t)
             : Graph.t * AccumFact.t =
          let
-            fun updateFact newBlocks (label, fact') (cha, fbase) =
+            fun updateFact newBlocks (label, fact', (cha, fbase)) =
             let
-               val fact = getOpt (FactBase.lookup fbase label, Fact.bot)
+               val fact = getOpt (FactBase.lookup (fbase, label), Fact.bot)
                val fact'' = Fact.join (fact, fact')
                val _ =
                   Control.diagnostic
@@ -568,13 +568,7 @@ fun transform (Program.T {datatypes, globals, functions, main}) =
                   (NONE, true) => (cha, fbase)
                 | (NONE, _) => (label::cha, fbase)
                 | (SOME fact'', _) =>
-                     (label::cha,
-                      FactBase.updateOrInsert fbase
-                      (label, fn oldFact =>
-                       case oldFact of
-                          SOME oldFact =>
-                             getOpt (Fact.join (oldFact, fact''), oldFact)
-                        | NONE => fact''))
+                     (label::cha, FactBase.insert (fbase, label, fact''))
             end
 
             (* TODO put elsewhere *)
@@ -650,7 +644,8 @@ fun transform (Program.T {datatypes, globals, functions, main}) =
                                   val changedDeps =
                                      List.concatMap
                                      (changed, fn cha =>
-                                      LabelMap.lookup (blockDeps, cha))
+                                      LabelMap.lookup (blockDeps, cha)
+                                      handle _ => [])
                                   val toAnalyze =
                                      List.remove
                                      (changedDeps, fn lbl =>
@@ -689,7 +684,7 @@ fun transform (Program.T {datatypes, globals, functions, main}) =
 
             fun getFact (label, fb) =
                AccumFact.Cont
-               (case FactBase.lookup fb label of
+               (case FactBase.lookup (fb, label) of
                    SOME fact => fact
                  | NONE => Fact.bot)
          in

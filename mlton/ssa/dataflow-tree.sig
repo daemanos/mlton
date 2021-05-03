@@ -43,22 +43,21 @@ signature DATAFLOW_TREE =
 
          val empty : 'a t
          val singleton: Label.t * 'a -> 'a t
-         val fromList: (Label.t * 'a) list -> 'a t
          val uniform: Label.t list * 'a -> 'a t
 
          val fromCases: (Con.t, Label.t) Cases.t * Label.t option * 'a *
                         (Con.t * Label.t -> 'a option) -> 'a t
 
-         val updateOrInsert : 'a t -> (Label.t * ('a option -> 'a)) -> 'a t
-         val update : 'a t -> (Label.t * ('a -> 'a)) -> 'a t
-         val insert : 'a t -> (Label.t * 'a) -> 'a t
-         val lookup : 'a t -> Label.t -> 'a option
-         val isMember : 'a t -> Label.t -> bool
+         val insert : 'a t * Label.t * 'a -> 'a t
+         val insertWith: ('a * 'a -> 'a) -> 'a t * Label.t * 'a -> 'a t
+         val insertWithJoin: ('a * 'a -> 'a option) -> 'a t * Label.t * 'a -> 'a t
+         val lookup : 'a t * Label.t -> 'a option
+         val isMember : 'a t * Label.t -> bool
          val deleteList : Label.t list -> 'a t -> 'a t
 
          val map : ('a -> 'b) -> 'a t -> 'b t
-         val foldi : (Label.t * 'a -> 'b -> 'b) -> 'b -> 'a t -> 'b
-         val fold : ('a -> 'b -> 'b) -> 'b -> 'a t -> 'b
+         val foldi : (Label.t * 'a * 'b -> 'b) -> 'b -> 'a t -> 'b
+         val fold : ('a * 'b -> 'b) -> 'b -> 'a t -> 'b
 
          val layout : ('a -> Layout.t) -> 'a t -> Layout.t
       end
