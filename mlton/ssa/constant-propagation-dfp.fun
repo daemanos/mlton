@@ -247,7 +247,24 @@ local
       val lb = norwLb
 
       (* TODO more simplification *)
-      val st = norwSt
+      fun st s _ =
+         case s of
+            Statement.T {var = SOME var, ty, exp} =>
+               (case exp of
+                   Exp.PrimApp {prim = Prim.MLton_equal, targs, ...} =>
+                      if Vector.size targs = 1 andalso
+                         Type.equals (Vector.first targs, Type.unit)
+                      then
+                         (* All `unit`s are equal *)
+                         replaceSt1
+                         (Statement.T
+                          {var = SOME var,
+                           ty = ty,
+                           exp = Exp.ConApp {con = Con.truee,
+                                             args = Vector.new0 ()}})
+                      else NONE
+                 | _ => NONE)
+          | _ => NONE
 
       fun tr t f =
          case t of
