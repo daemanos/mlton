@@ -16,6 +16,7 @@ structure ConstValue =
 struct
    datatype t = Const of Const.t
               | ConApp of {con: Con.t, args: t vector}
+              | Tuple of t vector
 
    fun equals (c1, c2) =
       case (c1, c2) of
@@ -23,6 +24,8 @@ struct
        | (ConApp {con = con1, args = args1},
           ConApp {con = con2, args = args2}) =>
           Con.equals (con1, con2) andalso Vector.forall2 (args1, args2, equals)
+       | (Tuple cs1, Tuple cs2) =>
+          (Vector.forall2 (cs1, cs2, equals) handle _ => false)
        | _ => false
 
    fun join (old, new) = if equals (old, new) then NONE else SOME Top
@@ -31,51 +34,48 @@ struct
       case const of
          Const c => Type.ofConst c
        | ConApp {con, ...} => conType con
+       | Tuple cs => Type.tuple (Vector.map (cs, typeOf))
 
-   fun toStatements (const, var, ty) =
-      case const of
-         Const c => [Statement.T {var = SOME var, ty = ty, exp = Exp.Const c}]
-       | ConApp {con, args} =>
-            let
-               fun introduceVar const =
-                  case const of
-                     Const c =>
-                        let
-                           val var = Var.newNoname ()
-                           val ty = Type.ofConst c
-                        in
-                           (var, toStatements (const, var, ty))
-                        end
-                   | ConApp {con, args} =>
-                        let
-                           val (vars, stss) =
-                              List.unzip (Vector.toListMap (args, introduceVar))
-                           val var = Var.newNoname ()
-                           val ty = conType con
-                           val exp =
-                              Exp.ConApp
-                              {con = con,
-                               args = Vector.fromList vars}
-                           val st =
-                              Statement.T
-                              {var = SOME var,
-                               ty = ty,
-                               exp = exp}
-                        in
-                           (var, List.snoc (List.concat stss, st))
-                        end
+   fun toStatements (const, var) =
+      let
+         fun introduceVars cs =
+            List.unzip
+            (Vector.toListMap (cs, fn c =>
+             let
+                val var = Var.newNoname ()
+                val sts = toStatements (c, var)
+             in
+                (var, sts)
+             end))
 
-               val (vars, stss) =
-                  List.unzip (Vector.toListMap (args, introduceVar))
-               val exp = Exp.ConApp {con = con, args = Vector.fromList vars}
-               val st = Statement.T {var = SOME var, ty = ty, exp = exp}
-            in
-               List.snoc (List.concat stss, st)
-            end
+         val (stss, exp) =
+            case const of
+               Const c => ([], Exp.Const c)
+             | ConApp {con, args} =>
+                  let
+                     val (vars, stss) = introduceVars args
+                     val exp =
+                        Exp.ConApp {con = con, args = Vector.fromList vars}
+                  in
+                     (stss, exp)
+                  end
+             | Tuple cs =>
+                  let
+                     val (vars, stss) = introduceVars cs
+                     val exp = Exp.Tuple (Vector.fromList vars)
+                  in
+                     (stss, exp)
+                  end
+         val st = Statement.T {var = SOME var, ty = typeOf const, exp = exp}
+      in
+         List.snoc (List.concat stss, st)
+      end
 
    fun layout const =
       let
          val layoutArgs = Vector.layout layout
+         fun separateArgs (args, sep) =
+            Layout.separate (Vector.toListMap (args, layout), sep)
          open Layout
       in
          case const of
@@ -86,6 +86,7 @@ struct
                     if Vector.isEmpty args
                     then empty
                     else seq [str " ", layoutArgs args]]
+          | Tuple cs => seq [str "(", seq (separateArgs (cs, ", ")), str ")"]
       end
 end
 
@@ -111,11 +112,6 @@ structure Fact = struct
          Lattice.insert (f, var, const)
       end
 
-      (*fun joinOrInsert (f, var, const) =
-         case joinPoset ConstValue.join (lookup (f, var), const) of
-            NONE => f
-          | SOME const' => insert (f, var, const')*)
-
    fun findAll (f, vars) =
       Vector.keepAllMap
       (vars, fn var =>
@@ -130,10 +126,7 @@ local
    (* Analysis: variable equals a literal constant *)
    val varHasLit : Fact.t transfer =
    let
-      fun lb (args, _) f =
-         Vector.fold
-         (args, f, fn ((arg, _), f) =>
-          getOpt (Fact.join (f, Lattice.singleton (arg, Bot)), f))
+      fun lb _ f = f
 
       fun st s f =
          case Statement.var s of
@@ -149,6 +142,14 @@ local
                               if (Vector.size args') = (Vector.size args)
                               then Elt (ConstValue.ConApp
                                         {con = con, args = args'})
+                              else Top
+                           end
+                      | Exp.Tuple args =>
+                           let
+                              val args' = Fact.findAll (f, args)
+                           in
+                              if (Vector.size args') = (Vector.size args)
+                              then Elt (ConstValue.Tuple args')
                               else Top
                            end
                       | _ => Top
@@ -200,10 +201,7 @@ local
                    * the dataflow problem *)
                   Return.foldLabel
                   (return, FactBase.empty, fn (label, fbase) =>
-                   FactBase.insert
-                   (fbase, label,
-                    Vector.fold (labelArgs label, f, fn ((arg, _), f) =>
-                                 Fact.insert (f, arg, Top))))
+                   FactBase.insert (fbase, label, f))
              | Runtime {return, ...} => FactBase.singleton (return, f)
              | _ => FactBase.empty
          end
@@ -217,7 +215,7 @@ local
 
       fun st s f =
          case s of
-            Statement.T {var = SOME var, ty, exp = Exp.Var var'} =>
+            Statement.T {var = SOME var, exp = Exp.Var var', ...} =>
                (case Lattice.find (f, var') of
                    SOME (Elt c) =>
                      let
@@ -231,7 +229,7 @@ local
                             end)
                         val sts =
                            Vector.fromList
-                           (ConstValue.toStatements (c, var, ty))
+                           (ConstValue.toStatements (c, var))
                      in SOME (Statements sts)
                      end
                  | _ => NONE)
@@ -246,24 +244,35 @@ local
    let
       val lb = norwLb
 
-      (* TODO more simplification *)
-      fun st s _ =
+      fun st s f =
          case s of
-            Statement.T {var = SOME var, ty, exp} =>
-               (case exp of
-                   Exp.PrimApp {prim = Prim.MLton_equal, targs, ...} =>
-                      if Vector.size targs = 1 andalso
-                         Type.equals (Vector.first targs, Type.unit)
-                      then
-                         (* All `unit`s are equal *)
-                         replaceSt1
-                         (Statement.T
-                          {var = SOME var,
-                           ty = ty,
-                           exp = Exp.ConApp {con = Con.truee,
-                                             args = Vector.new0 ()}})
-                      else NONE
-                 | _ => NONE)
+            Statement.T {var = SOME var, ty, exp = Exp.PrimApp {prim, args, ...}} =>
+               let
+                  val applyArgs =
+                     Vector.toListMap
+                     (args, fn arg =>
+                      case Fact.lookup (f, arg) of
+                         Elt (ConstValue.Const c) => Prim.ApplyArg.Const c
+                       | Elt (ConstValue.ConApp {con, args}) =>
+                            Prim.ApplyArg.Con
+                            {con = con,
+                             hasArg = Vector.isEmpty args}
+                       | _ => Prim.ApplyArg.Var arg)
+                  val exp' =
+                     case Prim.apply (prim, applyArgs, Var.equals) of
+                        Prim.ApplyResult.Const c => SOME (Exp.Const c)
+                      | Prim.ApplyResult.Bool b =>
+                           SOME (Exp.ConApp
+                                 {con = Con.fromBool b,
+                                  args = Vector.new0 ()})
+                      | _ => NONE
+               in
+                  case exp' of
+                     SOME exp' =>
+                        replaceSt1
+                        (Statement.T {var = SOME var, ty = ty, exp = exp'})
+                   | NONE => NONE
+               end
           | _ => NONE
 
       fun tr t f =
@@ -291,10 +300,8 @@ local
                                     (args, ([], []), fn (arg, (vars, stss)) =>
                                      let
                                         val var = Var.newNoname ()
-                                        val ty = ConstValue.typeOf arg
                                         val sts =
-                                           ConstValue.toStatements
-                                           (arg, var, ty)
+                                           ConstValue.toStatements (arg, var)
                                      in
                                         (var::vars, sts::stss)
                                      end)
