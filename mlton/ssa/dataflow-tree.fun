@@ -30,7 +30,7 @@ fun layoutPoset layoutF poset =
       case poset of
          Top => str "Top"
        | Bot => str "Bot"
-       | Elt f => seq [str "Elt[", layoutF f, str "]"]
+       | Elt f => layoutF f
    end
 
 fun joinPoset joinElt =

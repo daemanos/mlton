@@ -9,9 +9,6 @@ struct
 
 open P
 
-(* Optimization fuel (negative to disable) *)
-val fuel: int ref = ref ~1
-
 (* wrap facts and fact bases in a single datatype so they can be used in
  * recursive functions below *)
 structure AccumFact =
@@ -420,16 +417,8 @@ let
             in
                SOME (Graph.openL (suffix, blocks))
             end
-
-   val doit =
-      if !fuel < 0
-      then true
-      else
-         if !fuel > 0
-         then (fuel := !fuel - 1; true)
-         else false
 in
-   if doit
+   if Control.optFuelAvailAndUse ()
    then
       case n of
          Node.Lb al => doitLb al
@@ -775,6 +764,10 @@ fun transform (Program.T {datatypes, globals, functions, main}) =
           let
              val {args, blocks, mayInline, name, raises, returns, start} =
                 Function.dest f
+             val entries =
+                Tree.foldPost
+                (Function.dominatorTree f, [], fn (block, labels) =>
+                 (Block.label block)::labels)
              val labels = Vector.toListMap (blocks, Block.label)
              val fact0 = transferLb (args, start) fact0
              val af0 = AccumFact.Done (FactBase.uniform (labels, fact0))
@@ -791,7 +784,7 @@ fun transform (Program.T {datatypes, globals, functions, main}) =
                  let open Layout
                  in seq [str "Body (pre):\n", Graph.layout body]
                  end)
-             val (body, _) = analyzeAndRewrite rewrite [start] body af0
+             val (body, _) = analyzeAndRewrite rewrite entries body af0
              val _ =
                 Control.diagnostic
                 (fn () =>
