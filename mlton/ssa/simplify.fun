@@ -136,7 +136,9 @@ val ssaPassesDFX =
    {name = "localFlatten1", doit = LocalFlatten.transform, execute = true} ::
    {name = "constantPropagationDFX", doit = ConstantPropagationDFX.transform, execute = true} ::
    {name = "duplicateGlobals1", doit = DuplicateGlobals.transform, execute = false} ::
-   {name = "splitTypes1", doit = SplitTypes.transform, execute = true} ::
+   (* Note: removing splitTypes1 for now since it seems to always cause
+    * problems, but more investigation needed *)
+   (*{name = "splitTypes1", doit = SplitTypes.transform, execute = true} ::*)
    (* useless should run 
     *   - after constant propagation because constant propagation makes
     *     slots of tuples that are constant useless
