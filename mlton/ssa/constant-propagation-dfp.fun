@@ -201,7 +201,14 @@ local
                    * the dataflow problem *)
                   Return.foldLabel
                   (return, FactBase.empty, fn (label, fbase) =>
-                   FactBase.insert (fbase, label, f))
+                   let
+                      val f' =
+                         Vector.fold
+                         (labelArgs label, f, fn ((arg, _), f) =>
+                          Fact.insert (f, arg, Top))
+                   in
+                     FactBase.insert (fbase, label, f')
+                   end)
              | Runtime {return, ...} => FactBase.singleton (return, f)
              | _ => FactBase.empty
          end
